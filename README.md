@@ -63,12 +63,12 @@ that password. Use a different account in each app window to play both sides.
 2. **Drive** tab → tap the green **GO** button (allow location when asked).
 
 **Rider app:**
-1. **Where to?** → type a destination (pickup fills in from your GPS) → see the **suggested price** → set
-   **your offer** with − / + → **Request ride**. Optional: show female or male drivers first. (Pick **Schedule** to reserve a ride for later: it waits under *Activity → Upcoming*.)
+1. **Where to?** → type a destination (pickup fills in from your GPS) → see the **typical fares of nearby drivers** and the suggested price → type
+   **your offer** (any amount, in dollars and cents or sats) → **Request ride**. Optional: show female or male drivers first. (Pick **Schedule** to reserve a ride for later: it waits under *Activity → Upcoming*.)
 2. Wait for **"Finding your driver…"**. Nearby online drivers are shown as cars on the map.
 
 **Driver app:**
-3. A **request card** pops up with the rider's offer, pickup distance and the rider's rating. Tap **Accept**, or **Ask for a different price** to counter.
+3. A **request card** pops up with the rider's offer, pickup distance and the rider's rating. Tap **Accept**, or **Ask for a different price** and type your counter. Set your own base, per-mile and per-minute rates under *Account → Your typical fare*; riders see them.
 
 **Rider app:**
 4. Pick a driver (counter-offers are marked; fastest first) → **pay the deposit** with your connected wallet, or scan the

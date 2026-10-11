@@ -22,7 +22,7 @@ import { useGeolocation } from "../../lib/useGeolocation.js";
 import { useWakeLock } from "../../lib/useWakeLock.js";
 import { isNative } from "../../lib/nativeGeo.js";
 import { haversineDistance } from "../../lib/geo.js";
-import { depositSats, pickupEta, quoteFare, roadMiles, driveMinutes } from "../../lib/fare.js";
+import { depositSats, pickupEta, quoteFare, roadMiles, driveMinutes, normalizeRates, typicalFareUsd, satsFromUsd } from "../../lib/fare.js";
 import { isDriveReady } from "../../lib/profile.js";
 import { seal } from "../../lib/privacy.js";
 import { activeDriveFor, pendingOfferFor } from "../../lib/trips.js";
@@ -45,6 +45,15 @@ export function fareOf(request, btcUsd) {
   if (c.fareSats > 0) return c.fareSats;
   const miles = roadMiles(haversineDistance(c.pickup.lat, c.pickup.lng, c.dropoff.lat, c.dropoff.lng));
   return quoteFare({ miles, minutes: driveMinutes(miles) }, btcUsd).sats;
+}
+
+// What this driver typically charges for this trip, in sats (from their own rates; the app's if unset).
+export function typicalSatsFor(request, rates, btcUsd) {
+  const c = parse(request) || {};
+  const straight = c.pickup && c.dropoff ? haversineDistance(c.pickup.lat, c.pickup.lng, c.dropoff.lat, c.dropoff.lng) : 0;
+  const miles = c.distanceMiles ?? roadMiles(straight);
+  const minutes = c.durationMin ?? driveMinutes(miles);
+  return satsFromUsd(typicalFareUsd(rates, miles, minutes), btcUsd);
 }
 
 export function DriverProvider({ children }) {
@@ -87,7 +96,7 @@ export function DriverProvider({ children }) {
     const beat = () => {
       const p = posRef.current;
       // Never advertise a weak or stale position.
-      if (p && gpsRef.current === "good") publishPresence(user, { lat: p.lat, lng: p.lng, vehicle: carLabel(user.vehicle) });
+      if (p && gpsRef.current === "good") publishPresence(user, { lat: p.lat, lng: p.lng, vehicle: carLabel(user.vehicle), rates: normalizeRates(user.rates) || undefined });
     };
     beat();
     const id = setInterval(beat, PRESENCE_EVERY_MS);
@@ -116,7 +125,7 @@ export function DriverProvider({ children }) {
       publishRideLocation(user, riderPubkey, myPosition);
     } else if (visible && gps === "good" && now - lastNativeSend.current.presence > 15000) {
       lastNativeSend.current.presence = now;
-      publishPresence(user, { lat: myPosition.lat, lng: myPosition.lng, vehicle: carLabel(user.vehicle) });
+      publishPresence(user, { lat: myPosition.lat, lng: myPosition.lng, vehicle: carLabel(user.vehicle), rates: normalizeRates(user.rates) || undefined });
     }
   }, [myPosition]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -221,6 +230,7 @@ export function DriverProvider({ children }) {
           upfrontSats: depositSats(fare, depositPct),
           etaMinutes: miles == null ? 5 : pickupEta(miles),
           message: "",
+          typicalSats: typicalSatsFor(request, user.rates, btcUsd), // this driver's own typical fare for the trip (riders see it)
           gender: user.gender === "male" || user.gender === "female" ? user.gender : "", // optional, self-declared
           // The plate is private: only this rider can read it.
           plate: seal(user.sk, request.pubkey, {

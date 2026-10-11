@@ -13,11 +13,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "../../state/AppContext.jsx";
-import { useDriver, fareOf } from "../state/DriverContext.jsx";
-import { clampOffer, depositSats, driveMinutes, pickupEta, roadMiles, usdToSats } from "../../lib/fare.js";
+import { useDriver, fareOf, typicalSatsFor } from "../state/DriverContext.jsx";
+import { depositSats, driveMinutes, offerLimitsSats, pickupEta, roadMiles } from "../../lib/fare.js";
 import { FALLBACK_BTC_USD } from "../../config/settings.js";
-import { satsToUsd } from "../../ui/SatsAmount.jsx";
-import PriceStepper from "../../ui/PriceStepper.jsx";
+import AmountInput from "../../ui/AmountInput.jsx";
 import { haversineDistance } from "../../lib/geo.js";
 import { completedDrives, summarizeEarnings } from "../../lib/earnings.js";
 import { isScheduledLater } from "../../lib/trips.js";
@@ -160,6 +159,7 @@ function OnlineSheet({ onOpen }) {
 // (the request stays open for other drivers); cards opened by hand do not.
 function Incoming({ item, auto, onClose }) {
   const { btcUsd } = useApp();
+  const { user } = useApp();
   const { acceptRequest, decline, skip, depositPct } = useDriver();
   const { request, content: c, miles } = item;
   const [left, setLeft] = useState(REQUEST_CARD_SECONDS);
@@ -180,15 +180,16 @@ function Incoming({ item, auto, onClose }) {
   const tripMin = c.durationMin ?? driveMinutes(tripMiles);
   const awayMin = miles != null ? pickupEta(miles) : null;
 
-  // A counter-offer starts $1 above the rider's offer and can go up to 3x the suggested price.
+  // A counter-offer can be any amount above the rider's offer, up to 3x the suggested price.
+  // It starts at the driver's own typical fare for this trip, if that is higher than the offer.
   const rate = btcUsd || FALLBACK_BTC_USD;
-  const offerUsd = Math.max(1, Math.round(satsToUsd(fare, rate)));
-  const suggestedUsd = c.suggestedSats > 0 ? Math.max(1, Math.round(satsToUsd(c.suggestedSats, rate))) : offerUsd;
-  const [counterUsd, setCounterUsd] = useState(offerUsd + 1);
-  const counterSats = usdToSats(clampOffer(counterUsd, Math.max(suggestedUsd, offerUsd)), rate);
-  const price = countering ? counterSats : fare;
+  const typical = typicalSatsFor(request, user.rates, btcUsd);
+  const limits = offerLimitsSats(Math.max(c.suggestedSats || 0, fare), btcUsd);
+  const [counterSats, setCounterSats] = useState(() => (typical > fare ? typical : Math.round(fare * 1.1)));
+  const counterOk = Number.isFinite(counterSats) && counterSats > fare && counterSats <= limits.max;
+  const price = countering && counterOk ? counterSats : fare;
 
-  const accept = () => { setBusy(true); acceptRequest(request, countering ? counterSats : undefined); };
+  const accept = () => { if (countering && !counterOk) return; setBusy(true); acceptRequest(request, countering ? Math.round(counterSats) : undefined); };
   const dismiss = () => { decline(request); onClose(); };
 
   return (
@@ -227,14 +228,22 @@ function Incoming({ item, auto, onClose }) {
       <div className="mt-4 pt-3 border-t border-neutral-100"><RiderInfo pubkey={request.pubkey} compact /></div>
       {c.notes && <p className="mt-2 text-sm text-neutral-600 bg-neutral-100 rounded-xl px-3 py-2">“{c.notes}”</p>}
 
-      {c.suggestedSats > 0 && c.suggestedSats !== fare && (
-        <p className="text-xs text-neutral-500 mt-3">For this trip the app suggests {moneyText(c.suggestedSats, btcUsd)}.</p>
-      )}
+      <p className={`text-xs mt-3 ${typical > fare ? "text-amber-700" : "text-neutral-500"}`}>
+        Your typical fare for this trip: {moneyText(typical, btcUsd)}{typical > fare ? ". The offer is below it." : "."}
+      </p>
 
       {countering && (
         <div className="mt-3 rounded-2xl bg-neutral-100 px-4 py-3">
           <p className="text-center text-xs font-semibold uppercase tracking-wider text-neutral-500 mb-2">Your counter-offer</p>
-          <PriceStepper usd={counterUsd} suggestedUsd={Math.max(suggestedUsd, offerUsd)} min={offerUsd + 1} onChange={setCounterUsd} label="Counter-offer in dollars" />
+          <AmountInput
+            sats={counterSats}
+            rate={rate}
+            min={fare + 1}
+            max={limits.max}
+            minMessage={`Must be more than the rider's offer (${moneyText(fare, btcUsd)}).`}
+            onChange={setCounterSats}
+            label="Counter-offer"
+          />
           <p className="text-center text-xs text-neutral-500 mt-2">The rider sees your price next to other drivers' and chooses.</p>
         </div>
       )}
@@ -245,8 +254,8 @@ function Incoming({ item, auto, onClose }) {
 
       <div className="flex gap-3 mt-4">
         <Button variant="secondary" full={false} onClick={dismiss} aria-label="Decline" className="!px-5"><Icon name="x" size={22} /></Button>
-        <Button variant="go" onClick={accept} loading={busy}>
-          {busy ? "Sending…" : countering ? `Counter ${moneyText(counterSats, btcUsd)}` : `Accept ${moneyText(fare, btcUsd)}`}
+        <Button variant="go" onClick={accept} loading={busy} disabled={countering && !counterOk}>
+          {busy ? "Sending…" : countering ? (counterOk ? `Counter ${moneyText(counterSats, btcUsd)}` : "Enter a higher price") : `Accept ${moneyText(fare, btcUsd)}`}
         </Button>
       </div>
       {!busy && (

@@ -12,6 +12,7 @@ import { SectionLabel, Toggle, inputCls } from "../../ui/Parts.jsx";
 import { AccountHeader, ContactMethods, RelaysSection, BlockedSection, LogoutButton, useSaveProfile, useSaveLicense } from "../../features/profile/ProfileParts.jsx";
 import VehicleSection from "../../features/profile/VehicleSection.jsx";
 import LicenseSection from "../../features/profile/LicenseSection.jsx";
+import TypicalFareSection from "../../features/profile/TypicalFareSection.jsx";
 import { driveGaps, gapsText } from "../../lib/profile.js";
 import LightningAddressSection from "../../features/profile/LightningAddressSection.jsx";
 import WalletSection from "../../features/profile/WalletSection.jsx";
@@ -47,6 +48,8 @@ export default function AccountScreen() {
         />
         <LicenseSection picture={user.license || ""} onSave={saveLicense} />
         <LightningAddressSection value={user.lud16 || ""} onSave={(lud16) => save({ lud16 })} />
+
+        <TypicalFareSection rates={user.rates} onSave={(rates) => save({ rates })} />
 
         <section>
           <SectionLabel>Gender (optional)</SectionLabel>
