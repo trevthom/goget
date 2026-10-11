@@ -93,10 +93,23 @@ export default function DriveTrip({ request }) {
           cars={myPosition ? [{ pubkey: "me", lat: myPosition.lat, lng: myPosition.lng }] : []}
           fitKey={`${request.id}|${stage}|${myPosition ? "pos" : "nopos"}`}
           padBottom={390}
+          navigation
+          follow={myPosition ? { lat: myPosition.lat, lng: myPosition.lng, id: "me" } : null}
         />
       }
     >
-      <Sheet label="Current trip">
+      {/* Nearly collapsed while driving; it opens by itself at the pickup / destination, when the driver has a step to take. */}
+      <Sheet
+        label="Current trip"
+        peek={
+          <div className="flex items-baseline gap-2">
+            <p className="font-bold text-[17px] leading-6 truncate flex-1">{title}</p>
+            {eta != null && stage !== "arrived" && <span className="text-sm text-neutral-500 shrink-0">{eta} min</span>}
+          </div>
+        }
+        openKey={stage === "arrived" ? "arrived" : nearTarget ? `near-${stage}` : ""}
+        closeKey={stage}
+      >
         <h2 className="text-2xl font-bold leading-tight">{title}</h2>
         <p className="text-neutral-600 text-[15px] mt-0.5" role="status">{sub}</p>
         {!exact && (
