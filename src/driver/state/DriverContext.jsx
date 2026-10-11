@@ -16,7 +16,8 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef } f
 import { useApp } from "../../state/AppContext.jsx";
 import { relay } from "../../nostr/relay.js";
 import { EVENT_KINDS } from "../../nostr/eventKinds.js";
-import { publishPresence, publishRideLocation } from "../../nostr/live.js";
+import { publishPresence, publishRideLocation, subscribeMeter } from "../../nostr/live.js";
+import { useDriveOdometer } from "./useDriveOdometer.js";
 import { seedDemoData } from "../../nostr/demoData.js";
 import { useGeolocation } from "../../lib/useGeolocation.js";
 import { useWakeLock } from "../../lib/useWakeLock.js";
@@ -25,10 +26,12 @@ import { haversineDistance } from "../../lib/geo.js";
 import { depositSats, pickupEta, quoteFare, roadMiles, driveMinutes, normalizeRates, typicalFareUsd, satsFromUsd } from "../../lib/fare.js";
 import { isDriveReady } from "../../lib/profile.js";
 import { seal } from "../../lib/privacy.js";
+import { PICKUP_CHANGE_NOTE } from "../../lib/pickup.js";
 import { activeDriveFor, pendingOfferFor } from "../../lib/trips.js";
-import { isRideExpired, rideEnding, rideKey, rideStatus } from "../../lib/rides.js";
+import { isRideExpired, rideEnding, rideKey, rideStatus, rideTimes } from "../../lib/rides.js";
 import { DEFAULT_DEPOSIT_PERCENT, DEFAULT_REQUEST_RADIUS_MILES } from "../../config/settings.js";
 import { getSetting, setSetting } from "../../config/relays.js";
+import { moneyText } from "../../ui/Money.jsx";
 
 const DriverContext = createContext(null);
 export const useDriver = () => useContext(DriverContext);
@@ -82,6 +85,11 @@ export function DriverProvider({ children }) {
   const activeDrive = activeDriveFor(rideRequests, me);
   const pending = pendingOfferFor(me); // { offer, request } | null
 
+  // The driver's own odometer (miles to the pickup, miles on the trip), and the distances the rider's app
+  // says both screens should show (lib/meter.js: the driver's, unless the rider's differs by more than 5%).
+  const odo = useDriveOdometer(activeDrive, myPosition);
+  const [agreed, setAgreed] = useState(null); // { pm, tm, at }
+
   // ── Online / offline ──
   const [online, setOnline] = useState(false);
   // Only a good GPS fix may go online: a laptop with a Wi-Fi/IP position must not appear as a car.
@@ -108,10 +116,20 @@ export function DriverProvider({ children }) {
   useEffect(() => {
     if (!riderPubkey) return;
     // A weak fix still helps the rider find the car; a stale one would show it in the wrong place.
-    const beat = () => { if (posRef.current && gpsRef.current !== "stale") publishRideLocation(user, riderPubkey, posRef.current); };
+    const beat = () => { if (posRef.current && gpsRef.current !== "stale") publishRideLocation(user, riderPubkey, { ...posRef.current, ...odo.milesRef.current }); };
     beat();
     const id = setInterval(beat, LOCATION_EVERY_MS);
     return () => clearInterval(id);
+  }, [riderPubkey, user]);
+
+  // The rider's app sends the distances to show. Forget them when the ride changes.
+  useEffect(() => {
+    setAgreed(null);
+    if (!riderPubkey) return;
+    return subscribeMeter(user, riderPubkey, (m) => {
+      const ok = (x) => (typeof x === "number" && Number.isFinite(x) && x >= 0 && x < 5000 ? x : null);
+      setAgreed({ pm: ok(m.pm), tm: ok(m.tm), at: Date.now() });
+    });
   }, [riderPubkey, user]);
 
   // In the native shell the page can be throttled in the background, so send a
@@ -122,7 +140,7 @@ export function DriverProvider({ children }) {
     const now = Date.now();
     if (riderPubkey && now - lastNativeSend.current.ride > 5000) {
       lastNativeSend.current.ride = now;
-      publishRideLocation(user, riderPubkey, myPosition);
+      publishRideLocation(user, riderPubkey, { ...myPosition, ...odo.milesRef.current });
     } else if (visible && gps === "good" && now - lastNativeSend.current.presence > 15000) {
       lastNativeSend.current.presence = now;
       publishPresence(user, { lat: myPosition.lat, lng: myPosition.lng, vehicle: carLabel(user.vehicle), rates: normalizeRates(user.rates) || undefined });
@@ -196,6 +214,8 @@ export function DriverProvider({ children }) {
       const mine = (ev.tags || []).some((t) => t[0] === "p" && t[1] === me);
       if (ev.kind === EVENT_KINDS.RIDE_CANCEL && mine) pushNotice("The rider cancelled the ride.");
       else if (ev.kind === EVENT_KINDS.RIDE_ACCEPT && mine) pushNotice("Rider confirmed. Head to the pickup.");
+      else if (ev.kind === EVENT_KINDS.RIDE_PICKUP_CHANGE && mine) pushNotice(`Your rider asked to change the pickup. Open the trip to accept or decline. ${PICKUP_CHANGE_NOTE}`);
+      else if (ev.kind === EVENT_KINDS.RIDE_PAYMENT && mine && parse(ev)?.phase === "tip" && parse(ev)?.amountSats > 0) pushNotice(`A rider sent you a ${moneyText(parse(ev).amountSats, btcUsd)} tip. Thank you for the ride!`);
       else if (ev.kind === EVENT_KINDS.RIDE_REQUEST && alerts && online && !activeDrive && !isBlockedPk(ev.pubkey)) {
         const c = parse(ev);
         const p = posRef.current;
@@ -204,7 +224,7 @@ export function DriverProvider({ children }) {
         }
       }
     });
-  }, [me, pushNotice, alerts, online, activeDrive, radius, isBlockedPk]);
+  }, [me, pushNotice, alerts, online, activeDrive, radius, isBlockedPk, btcUsd]);
 
   // The ride I was waiting on went to someone else (or was cancelled).
   const hadPending = useRef(null);
@@ -255,14 +275,30 @@ export function DriverProvider({ children }) {
 
   const mark = useCallback(
     (request, stage) => {
+      // A marker is replaceable (a relay keeps only the newest), so it also carries the earlier time:
+      // `at` = now, and the "riding" marker recalls when the driver arrived.
+      const arrivedAt = rideTimes(request).arrivedAt;
       publish(
         EVENT_KINDS.RIDE_STAGE,
-        { stage },
+        { stage, at: Date.now(), ...(stage === "riding" && arrivedAt ? { arrivedAt } : {}) },
         [["e", request.id], ["p", request.pubkey], ["d", "stage-" + rideKey(request)], ["t", "ride-stage"]]
       );
       refreshData();
     },
     [publish, refreshData]
+  );
+  // Answer the rider's request to change the pickup (accepted = true / false).
+  const answerPickup = useCallback(
+    (request, changeId, accepted) => {
+      publish(
+        EVENT_KINDS.RIDE_PICKUP_REPLY,
+        { changeId, accepted: !!accepted },
+        [["e", request.id], ["p", request.pubkey], ["d", `pickup-reply-${changeId}`], ["t", "ride-pickup"]]
+      );
+      refreshData();
+      pushNotice(accepted ? `New pickup accepted. Your route now goes there. ${PICKUP_CHANGE_NOTE}` : `Kept the first pickup. The rider is told. ${PICKUP_CHANGE_NOTE}`);
+    },
+    [publish, refreshData, pushNotice]
   );
   const arrive = useCallback((request) => mark(request, "arrived"), [mark]);
   const startTrip = useCallback((request) => mark(request, "riding"), [mark]);
@@ -307,8 +343,8 @@ export function DriverProvider({ children }) {
     online, goOnline, goOffline,
     depositPct, setDepositPct, radius, setRadius, alerts, setAlerts,
     open, decline, skip, skipped,
-    activeDrive, pending, receipt, dismissReceipt,
-    acceptRequest, arrive, startTrip, completeTrip, cancelDrive, rateRider,
+    activeDrive, pending, receipt, dismissReceipt, odo, agreed,
+    acceptRequest, answerPickup, arrive, startTrip, completeTrip, cancelDrive, rateRider,
   };
   return <DriverContext.Provider value={value}>{children}</DriverContext.Provider>;
 }

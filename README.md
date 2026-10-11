@@ -111,6 +111,7 @@ invoice from another wallet.
 - Your **license plate** is encrypted and sent only to the rider you drive.
 - A driver who is online shares an **approximate** location (about 100 m) publicly. During a ride the
   exact location goes only to the matched rider, encrypted.
+- A tip is optional and can be sent any time after a completed ride (Activity → the trip → Leave a tip).
 - Your driver's license photo is encrypted to the driver's own key. Riders never see it.
 - Ride requests, price offers and replies are public on the relays you use.
 - Looking up your address from GPS sends your position (rounded to about 10 m) to the free Photon

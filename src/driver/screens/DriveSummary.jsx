@@ -17,6 +17,7 @@ import RatingForm from "../../ui/RatingForm.jsx";
 import RiderInfo from "../components/RiderInfo.jsx";
 import BlockButton from "../../ui/BlockButton.jsx";
 import EvidenceCard from "../components/EvidenceCard.jsx";
+import { tipsOf } from "../../lib/evidence.js";
 
 const parse = (e) => { try { return JSON.parse(e.content); } catch { return null; } };
 
@@ -32,6 +33,7 @@ export default function DriveSummary({ request }) {
   const offer = offerFrom(request, user.publicKey); // the fare this driver agreed to
   const fare = (offer ? parse(offer)?.priceSats : c.fareSats) || 0;
   const endedAt = rideEnding(request)?.at;
+  const tipped = tipsOf(request).reduce((s, t) => s + t.sats, 0); // optional, from the rider, any time later
 
   if (!completed) {
     return (
@@ -56,6 +58,7 @@ export default function DriveSummary({ request }) {
             <div className="flex justify-between items-end"><dt className="font-semibold">Fare</dt><dd><Money sats={fare} stacked className="text-2xl font-extrabold" /></dd></div>
             {deposit > 0 && <div className="flex justify-between"><dt className="text-neutral-600">Deposit (paid up front)</dt><dd><Money sats={deposit} /></dd></div>}
             {fare - deposit > 0 && <div className="flex justify-between"><dt className="text-neutral-600">Rider pays now</dt><dd><Money sats={fare - deposit} /></dd></div>}
+            {tipped > 0 && <div className="flex justify-between"><dt className="font-semibold text-[#05683a]">Tip</dt><dd><Money sats={tipped} className="font-bold" /></dd></div>}
           </dl>
         )}
         <p className="text-neutral-500 text-xs mt-2">Payments go straight to your Lightning address. Check your wallet for the rest of the fare.</p>

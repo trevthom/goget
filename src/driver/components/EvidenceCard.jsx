@@ -30,7 +30,7 @@ export default function EvidenceCard({ request }) {
 
   useEffect(() => {
     let alive = true;
-    records.forEach((r) => verifyPayment(r, user.lud16).then((v) => alive && setChecks((c) => ({ ...c, [r.phase]: v }))));
+    records.forEach((r) => verifyPayment(r, user.lud16).then((v) => alive && setChecks((c) => ({ ...c, [`${r.phase}:${r.at}`]: v }))));
     return () => { alive = false; };
   }, [key, user.lud16]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -43,17 +43,17 @@ export default function EvidenceCard({ request }) {
   return (
     <div className="rounded-2xl border border-neutral-200 p-4 mt-5">
       <h2 className="text-xs font-semibold uppercase tracking-wider text-neutral-500 mb-2">Trip record</h2>
-      {["deposit", "rest"].map((phase) => {
-        const r = records.find((x) => x.phase === phase);
-        if (!r && phase === "deposit") return null;
-        const [text, cls] = r ? LABEL[checks[phase] || "unverified"] : ["Waiting for the rider's payment record.", "text-neutral-500"];
+      {[...["deposit", "rest"].map((phase) => records.find((x) => x.phase === phase) || { phase, missing: true }), ...records.filter((x) => x.phase === "tip")].map((r) => {
+        if (r.missing && r.phase === "deposit") return null;
+        const k = `${r.phase}:${r.at}`;
+        const [text, cls] = !r.missing ? LABEL[checks[k] || "unverified"] : ["Waiting for the rider's payment record.", "text-neutral-500"];
         return (
-          <div key={phase} className="py-1.5 text-[15px]">
+          <div key={k} className="py-1.5 text-[15px]">
             <div className="flex justify-between">
-              <span className="font-medium">{phase === "deposit" ? "Deposit" : "Rest of the fare"}</span>
-              {r && <Money sats={r.amountSats} />}
+              <span className="font-medium">{r.phase === "deposit" ? "Deposit" : r.phase === "tip" ? "Tip" : "Rest of the fare"}</span>
+              {!r.missing && <Money sats={r.amountSats} />}
             </div>
-            <p className={`text-xs ${cls}`}>{r ? (checks[phase] ? text : "Checking…") : text}</p>
+            <p className={`text-xs ${cls}`}>{!r.missing ? (checks[k] ? text : "Checking…") : text}</p>
           </div>
         );
       })}

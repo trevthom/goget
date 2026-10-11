@@ -45,6 +45,7 @@ export default function EarningsScreen() {
       <div className="text-center mb-6">
         <Money sats={t.sats} stacked className="text-5xl font-extrabold tracking-tight" subClassName="text-neutral-500 text-sm" />
         <p className="text-neutral-600 mt-2">{t.trips} trip{t.trips === 1 ? "" : "s"}</p>
+        {t.tips > 0 && <p className="text-[#05683a] text-sm font-medium mt-0.5">Includes <Money sats={t.tips} className="font-semibold" /> in tips</p>}
       </div>
 
       {shown.length === 0 ? (
@@ -55,7 +56,7 @@ export default function EarningsScreen() {
         </div>
       ) : (
         <ul className="divide-y divide-neutral-100">
-          {shown.slice(0, 100).map(({ request, fareSats, at }) => {
+          {shown.slice(0, 100).map(({ request, fareSats, tipSats, at }) => {
             const trip = exactTrip(request, user) || parse(request);
             return (
               <li key={request.id} className="flex items-center gap-3 py-3">
@@ -64,7 +65,10 @@ export default function EarningsScreen() {
                   <span className="block font-semibold truncate">{trip?.dropoff?.name}</span>
                   <span className="block text-sm text-neutral-500">{new Date(at * 1000).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}</span>
                 </span>
-                <Money sats={fareSats} className="font-semibold" />
+                <span className="text-right">
+                  <Money sats={fareSats} className="font-semibold" />
+                  {tipSats > 0 && <span className="block text-xs text-[#05683a]">+ <Money sats={tipSats} /> tip</span>}
+                </span>
               </li>
             );
           })}

@@ -13,7 +13,9 @@ import { useEffect, useRef, useState } from "react";
 import { ARRIVE_RADIUS_METERS } from "../../config/settings.js";
 import { useApp } from "../../state/AppContext.jsx";
 import { useDriver } from "../state/DriverContext.jsx";
-import { rideConfirm, rideStage } from "../../lib/rides.js";
+import { rideConfirm, rideStage, rideTimes } from "../../lib/rides.js";
+import { meterView } from "../../lib/meter.js";
+import TripMeter, { peekMeter } from "../../ui/TripMeter.jsx";
 import { exactTrip } from "../../lib/privacy.js";
 import { acceptFor, offerFrom } from "../../lib/trips.js";
 import { haversineDistance } from "../../lib/geo.js";
@@ -26,6 +28,8 @@ import ContactSheet from "../../ui/ContactSheet.jsx";
 import { MapPage, Sheet } from "../../ui/Layout.jsx";
 import { ConfirmDialog } from "../../ui/Parts.jsx";
 import RiderInfo, { useRiderInfo } from "../components/RiderInfo.jsx";
+import { pickupChange, PICKUP_CHANGE_NOTE } from "../../lib/pickup.js";
+import { readPickup } from "../../lib/privacy.js";
 
 const parse = (e) => { try { return JSON.parse(e.content); } catch { return null; } };
 const r3 = (n) => Math.round(n * 1000) / 1000;
@@ -33,7 +37,7 @@ const mmss = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
 export default function DriveTrip({ request }) {
   const { user, liveTick, pushNotice } = useApp();
-  const { myPosition, arrive, startTrip, completeTrip, cancelDrive } = useDriver();
+  const { myPosition, arrive, startTrip, completeTrip, cancelDrive, answerPickup, odo, agreed } = useDriver();
   const stage = rideStage(request);
   const exact = exactTrip(request, user);
   const trip = exact || parse(request);
@@ -51,6 +55,11 @@ export default function DriveTrip({ request }) {
   useEffect(() => { if (stage === "arrived" && !arrivedAt) setArrivedAt(Date.now()); }, [stage]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const { pickup, dropoff } = trip;
+  // The rider asked to move the pickup. Until the driver accepts, the first one stays.
+  const change = pickupChange(request);
+  const pendingChange = stage === "enroute" && change?.status === "pending" ? change : null;
+  const proposed = pendingChange ? readPickup(pendingChange.proposal, request, user) : null;
+  const shiftMiles = proposed ? haversineDistance(pickup.lat, pickup.lng, proposed.lat, proposed.lng) : null;
   const target = stage === "riding" ? dropoff : pickup;
   const miles = myPosition ? haversineDistance(myPosition.lat, myPosition.lng, target.lat, target.lng) : null;
   // Minutes left: the road route from the car when the router answered, else a straight-line guess.
@@ -73,8 +82,19 @@ export default function DriveTrip({ request }) {
     }
   }, [nearTarget, stage]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Time and distance so far. The distance is the one the rider's app agreed on (the driver's own, unless the
+  // rider's differs by more than 5%); until it arrives, the driver's own.
+  const fresh = agreed && now - agreed.at < 90000;
+  const view = meterView({
+    stage, times: rideTimes(request), nowMs: now,
+    pickupMiles: fresh && agreed.pm != null ? agreed.pm : odo.pm,
+    tripMiles: fresh && agreed.tm != null ? agreed.tm : odo.tm,
+  });
+  const meterText = peekMeter(view);
+
   const title =
-    stage === "enroute" ? `Pick up ${profile?.name || "your rider"}`
+    pendingChange ? "Rider changed the pickup"
+    : stage === "enroute" ? `Pick up ${profile?.name || "your rider"}`
     : stage === "arrived" ? `Waiting for ${profile?.name || "your rider"}`
     : `Drop off at ${dropoff.name}`;
   const sub =
@@ -104,14 +124,36 @@ export default function DriveTrip({ request }) {
         peek={
           <div className="flex items-baseline gap-2">
             <p className="font-bold text-[17px] leading-6 truncate flex-1">{title}</p>
-            {eta != null && stage !== "arrived" && <span className="text-sm text-neutral-500 shrink-0">{eta} min</span>}
+            {(meterText || (eta != null && stage !== "arrived")) && <span className="text-sm text-neutral-500 shrink-0 tabular-nums">{meterText || `${eta} min`}</span>}
           </div>
         }
-        openKey={stage === "arrived" ? "arrived" : nearTarget ? `near-${stage}` : ""}
+        openKey={stage === "arrived" ? "arrived" : pendingChange ? `pickup-${pendingChange.id}` : nearTarget ? `near-${stage}` : ""}
         closeKey={stage}
       >
         <h2 className="text-2xl font-bold leading-tight">{title}</h2>
         <p className="text-neutral-600 text-[15px] mt-0.5" role="status">{sub}</p>
+        <TripMeter view={view} className="mt-3" />
+        {pendingChange && (
+          <div className="mt-3 rounded-2xl border-2 border-black p-4" role="group" aria-label="Pickup change request">
+            <p className="font-bold">The rider asks for a new pickup</p>
+            {proposed ? (
+              <p className="text-[15px] mt-1">
+                <span className="font-semibold">{proposed.name}</span>
+                {shiftMiles != null && <span className="text-neutral-600"> · {shiftMiles < 0.1 ? "under 0.1" : shiftMiles.toFixed(1)} mi from the first pickup</span>}
+              </p>
+            ) : (
+              <p className="text-sm text-neutral-600 mt-1">The new place can't be read yet.</p>
+            )}
+            <p className="text-xs text-neutral-600 mt-2">{PICKUP_CHANGE_NOTE} The rider is told this too.</p>
+            <div className="flex gap-2 mt-3">
+              <Button size="md" variant="go" disabled={!proposed} onClick={() => answerPickup(request, pendingChange.id, true)}>Accept new pickup</Button>
+              <Button size="md" variant="secondary" onClick={() => answerPickup(request, pendingChange.id, false)}>Keep first pickup</Button>
+            </div>
+          </div>
+        )}
+        {stage === "enroute" && change?.status === "accepted" && (
+          <p className="mt-3 text-sm text-[#05683a] bg-[#e6f4ec] rounded-xl px-3 py-2" role="status">New pickup accepted: {pickup.name}. {PICKUP_CHANGE_NOTE}</p>
+        )}
         {!exact && (
           <p className="text-sm text-amber-700 bg-amber-50 rounded-xl px-3 py-2 mt-3">
             Showing the approximate area. The exact address arrives with the rider's confirmation. This can take a moment.
