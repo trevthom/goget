@@ -31,7 +31,7 @@ import Avatar from "../../ui/Avatar.jsx";
 import Icon from "../../ui/Icon.jsx";
 import { MapPage, Sheet, FloatButton } from "../../ui/Layout.jsx";
 import { Spinner } from "../../ui/Parts.jsx";
-import { gpsMessage } from "../../lib/gps.js";
+import { gpsMessage, canBeOnline, approxNote } from "../../lib/gps.js";
 import RiderInfo, { useRiderInfo } from "../components/RiderInfo.jsx";
 
 const whenText = (time) => (time === "ASAP" ? "Now" : new Date(time).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" }));
@@ -102,7 +102,7 @@ function OfflineSheet() {
         <button
           type="button"
           onClick={goOnline}
-          disabled={gps !== "good"}
+          disabled={!canBeOnline(gps, myPosition)}
           aria-label="Go online"
           className="w-24 h-24 rounded-full bg-[#05944f] text-white text-2xl font-extrabold tracking-wide shadow-[0_6px_18px_rgba(5,148,79,0.45)] active:scale-95 transition-transform disabled:bg-neutral-300 disabled:shadow-none"
         >
@@ -110,8 +110,10 @@ function OfflineSheet() {
         </button>
         <h2 className="text-xl font-bold mt-4">You're offline</h2>
         <p className="text-neutral-600 text-[15px] mt-1 max-w-xs" role="status">
-          {gps !== "good"
+          {!canBeOnline(gps, myPosition)
             ? gpsMessage(gps, myPosition, geoError)
+            : gps === "weak"
+            ? approxNote(myPosition)
             : open.length
             ? `${open.length} request${open.length === 1 ? "" : "s"} near you. Go online to see them.`
             : "Go online to start getting ride requests."}
@@ -131,7 +133,7 @@ function OnlineSheet({ onOpen }) {
         <div className="flex-1 min-w-0">
           <h2 className="text-xl font-bold leading-tight">You're online</h2>
           <p className="text-neutral-600 text-sm" role="status">
-            {gps !== "good" ? `Riders can't see you. ${gpsMessage(gps, myPosition, geoError)}` : open.length ? `${open.length} request${open.length === 1 ? "" : "s"} near you` : "Looking for ride requests…"}
+            {!canBeOnline(gps, myPosition) ? `Riders can't see you. ${gpsMessage(gps, myPosition, geoError)}` : gps === "weak" ? approxNote(myPosition) : open.length ? `${open.length} request${open.length === 1 ? "" : "s"} near you` : "Looking for ride requests…"}
           </p>
         </div>
         <Button size="sm" variant="secondary" full={false} onClick={goOffline}>Go offline</Button>

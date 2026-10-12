@@ -164,6 +164,11 @@ try {
     await sleep(6000);
     const text = (await D.locator("dl").first().innerText()).replace(/\s+/g, " ");
     log("     driver summary:", text);
+    // A few seconds after the finish both screens must show the same fare and the same paid amount.
+    const later = (await R.locator("dl").first().innerText()).replace(/\s+/g, " ");
+    log("     rider receipt, later:", later);
+    const sats = (t) => [...t.matchAll(/([\d,]+) sats/g)].map((m) => m[1]);
+    if (sats(text).slice(0, 2).join() !== sats(later).slice(0, 2).join()) throw new Error(`rider and driver disagree: ${sats(later)} vs ${sats(text)}`);
     await D.getByRole("button", { name: "Back to driving" }).click();
     await D.getByRole("button", { name: "Account" }).click();
     await D.getByText("Ecash wallet").waitFor();

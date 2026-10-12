@@ -23,6 +23,7 @@ import { useDriveOdometer } from "./useDriveOdometer.js";
 import { seedDemoData } from "../../nostr/demoData.js";
 import { useGeolocation } from "../../lib/useGeolocation.js";
 import { useWakeLock } from "../../lib/useWakeLock.js";
+import { canBeOnline } from "../../lib/gps.js";
 import { isNative } from "../../lib/nativeGeo.js";
 import { haversineDistance } from "../../lib/geo.js";
 import { pickupEta, quoteFare, roadMiles, driveMinutes, normalizeRates, typicalSats, APP_RATES } from "../../lib/fare.js";
@@ -109,8 +110,8 @@ export function DriverProvider({ children }) {
 
   // ── Online / offline ──
   const [online, setOnline] = useState(false);
-  // Only a good GPS fix may go online: a laptop with a Wi-Fi/IP position must not appear as a car.
-  const goOnline = useCallback(() => { if (driveReady && gpsRef.current === "good") setOnline(true); }, [driveReady]);
+  // A good or an approximate GPS fix may go online (lib/gps.js canBeOnline); a stale, missing or very vague one may not.
+  const goOnline = useCallback(() => { if (driveReady && canBeOnline(gpsRef.current, posRef.current)) setOnline(true); }, [driveReady]);
   const goOffline = useCallback(() => setOnline(false), []);
   useEffect(() => { if (!driveReady) setOnline(false); }, [driveReady]);
 
@@ -120,8 +121,8 @@ export function DriverProvider({ children }) {
     if (!visible) return;
     const beat = () => {
       const p = posRef.current;
-      // Never advertise a weak or stale position.
-      if (p && gpsRef.current === "good") publishPresence(user, { lat: p.lat, lng: p.lng, vehicle: carLabel(user.vehicle), rates: normalizeRates(user.rates) || undefined });
+      // Never advertise a stale or very vague position (an approximate one is fine: it is rounded to ~100 m).
+      if (p && canBeOnline(gpsRef.current, p)) publishPresence(user, { lat: p.lat, lng: p.lng, vehicle: carLabel(user.vehicle), rates: normalizeRates(user.rates) || undefined });
     };
     beat();
     const id = setInterval(beat, PRESENCE_EVERY_MS);
@@ -158,7 +159,7 @@ export function DriverProvider({ children }) {
     if (riderPubkey && now - lastNativeSend.current.ride > 5000) {
       lastNativeSend.current.ride = now;
       publishRideLocation(user, riderPubkey, { ...myPosition, ...odo.milesRef.current });
-    } else if (visible && gps === "good" && now - lastNativeSend.current.presence > 15000) {
+    } else if (visible && canBeOnline(gps, myPosition) && now - lastNativeSend.current.presence > 15000) {
       lastNativeSend.current.presence = now;
       publishPresence(user, { lat: myPosition.lat, lng: myPosition.lng, vehicle: carLabel(user.vehicle), rates: normalizeRates(user.rates) || undefined });
     }

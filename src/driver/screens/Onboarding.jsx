@@ -24,7 +24,7 @@ export default function Onboarding() {
       <Checklist />
       <Button className="mt-6" onClick={() => setView("account")}>Complete in Account</Button>
       <p className="text-neutral-500 text-xs text-center mt-3">
-        Your photo and car are public. Your plate is sealed and shared only with the rider you drive. Your license photo is encrypted and stays private.
+        Your photo and car are public. Your plate is sealed and shared only with the rider you drive.
       </p>
     </Screen>
   );

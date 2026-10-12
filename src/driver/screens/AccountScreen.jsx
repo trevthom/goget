@@ -1,6 +1,6 @@
 // ════════════════════════════════════════════════════════════
 //  ACCOUNT (driver) — Profile, what is needed to drive (vehicle,
-//  license photo, Lightning address; the banner names what is still
+//  Lightning address; the banner names what is still
 //  missing), currency, your rates (frozen while a ride runs), the ecash wallet and the mint you
 //  are paid at, optional gender, driving settings (request radius, alerts), the Lightning wallet,
 //  contact methods, relays, keys, log out.
@@ -10,9 +10,8 @@ import { useApp } from "../../state/AppContext.jsx";
 import { useDriver } from "../state/DriverContext.jsx";
 import { Screen } from "../../ui/Layout.jsx";
 import { SectionLabel, Toggle, inputCls } from "../../ui/Parts.jsx";
-import { AccountHeader, ContactMethods, RelaysSection, BlockedSection, LogoutButton, useSaveProfile, useSaveLicense } from "../../features/profile/ProfileParts.jsx";
+import { AccountHeader, ContactMethods, RelaysSection, BlockedSection, LogoutButton, useSaveProfile } from "../../features/profile/ProfileParts.jsx";
 import VehicleSection from "../../features/profile/VehicleSection.jsx";
-import LicenseSection from "../../features/profile/LicenseSection.jsx";
 import TypicalFareSection from "../../features/profile/TypicalFareSection.jsx";
 import { driveGaps, gapsText } from "../../lib/profile.js";
 import LightningAddressSection from "../../features/profile/LightningAddressSection.jsx";
@@ -29,7 +28,6 @@ export default function AccountScreen() {
   const { driveReady, activeDrive, radius, setRadius, alerts, setAlerts } = useDriver();
   const onRide = !!activeDrive; // rates and the mint are frozen while a ride runs
   const save = useSaveProfile();
-  const saveLicense = useSaveLicense();
   const gaps = driveGaps(user);
   return (
     <Screen title="Account">
@@ -49,7 +47,6 @@ export default function AccountScreen() {
           onSave={(vehicle) => save({ vehicle })}
           gapsFor={(vehicle) => driveGaps({ ...user, vehicle })}
         />
-        <LicenseSection picture={user.license || ""} onSave={saveLicense} />
         <LightningAddressSection value={user.lud16 || ""} onSave={(lud16) => save({ lud16 })} />
 
         <CurrencySection />

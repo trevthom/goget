@@ -2,7 +2,7 @@
 //  DRIVER APP — The root. Wraps everything in the shared state, shows the
 //  login screen until someone is signed in, then three tabs:
 //    Drive (home) · Earnings · Account
-//  The tab bar hides during a drive so the trip sheet gets the screen.
+//  The tab bar is always visible.
 // ════════════════════════════════════════════════════════════
 
 import { AppProvider, useApp } from "../state/AppContext.jsx";
@@ -21,20 +21,19 @@ const SCREENS = { drive: HomeScreen, earnings: EarningsScreen, account: AccountS
 
 function Shell() {
   const { view, setView } = useApp();
-  const { activeDrive, receipt, open, online, driveReady } = useDriver();
+  const { open, online, driveReady } = useDriver();
   const Screen = SCREENS[view] || HomeScreen;
   const tabs = [
     { id: "drive", label: "Drive", icon: "car", badge: view !== "drive" && online ? open.length : 0 },
     { id: "earnings", label: "Earnings", icon: "chart" },
     { id: "account", label: "Account", icon: "user", badge: !driveReady ? 1 : 0 },
   ];
-  const busy = view === "drive" && (activeDrive || receipt);
   return (
     <AppFrame>
       <ErrorBoundary resetKey={view}>
         <Screen />
       </ErrorBoundary>
-      {!busy && <TabBar items={tabs} active={view} onChange={setView} />}
+      <TabBar items={tabs} active={view} onChange={setView} />
       <UserModal />
       <ConnectionBanner />
       <NoticeBanner />

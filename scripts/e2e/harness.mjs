@@ -46,17 +46,16 @@ export async function boot({ feePpk = 0, driverRates = null } = {}) {
   const browser = await chromium.launch({ args: ["--no-sandbox"] });
   const errors = [];
 
-  // Seed the driver's profile (photo, vehicle, license, Lightning address) so the app lets them drive.
+  // Seed the driver's profile (photo, vehicle, Lightning address) so the app lets them drive.
   const sk = driver.sk, pk = driver.publicKey;
   const meta = Ev.buildSignedEvent(K.METADATA, {
     name: "Dina Driver", about: "NostrRide user", communication: [], picture: JPEG, lud16: "dina@example.com", ...(driverRates ? { rates: driverRates } : {}),
     vehicle: Priv.sealVehicle({ year: "2020", make: "Toyota", model: "Prius", picture: JPEG, plateState: "KY", plateNumber: "ABC123" }, sk, pk),
   }, [], sk);
-  const lic = Ev.buildSignedEvent(K.DRIVER_LICENSE, Priv.sealLicense(JPEG, sk, pk), [["d", "license"], ["t", "nostrride"]], sk);
-  relay.inject(meta); relay.inject(lic);
+  relay.inject(meta);
 
-  async function newContext(name, pos, extraStorage = {}) {
-    const ctx = await browser.newContext({ viewport: { width: 420, height: 880 }, geolocation: { latitude: pos.lat, longitude: pos.lng, accuracy: 10 }, permissions: ["geolocation"] });
+  async function newContext(name, pos, extraStorage = {}, accuracy = 10) {
+    const ctx = await browser.newContext({ viewport: { width: 420, height: 880 }, geolocation: { latitude: pos.lat, longitude: pos.lng, accuracy }, permissions: ["geolocation"] });
     await ctx.addInitScript(({ relayUrl, mintUrl, extra }) => {
       localStorage.setItem("nostrride_relays", JSON.stringify([relayUrl]));
       localStorage.setItem("nostrride_ecashMint", JSON.stringify(mintUrl));

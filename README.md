@@ -59,7 +59,7 @@ that password. Use a different account in each app window to play both sides.
 ## 3. A ride, step by step
 
 **Driver app** (once):
-1. **Account** tab → add a **photo**, your **vehicle** (year, make, model, plate, and a photo of the car), a photo of your **driver's license** (encrypted; only you can open it) and a
+1. **Account** tab → add a **photo**, your **vehicle** (year, make, model, plate, and a photo of the car), and a
    **Lightning address** (like `you@wallet.com`; you cash out there). Check the **ecash mint** you are paid at (*Account → Ecash wallet*).
 2. **Drive** tab → tap the green **GO** button (allow location when asked).
 
@@ -115,7 +115,6 @@ still pay any invoice from another wallet.
 - A driver who is online shares an **approximate** location (about 100 m) publicly. During a ride the
   exact location goes only to the matched rider, encrypted.
 - A tip is optional and can be sent any time after a completed ride (Activity → the trip → Leave a tip).
-- Your driver's license photo is encrypted to the driver's own key. Riders never see it.
 - Ride requests, price offers and replies are public on the relays you use.
 - Looking up your address from GPS sends your position (rounded to about 10 m) to the free Photon
   geocoder. Swap that service for your own before a real launch.
@@ -154,7 +153,7 @@ npm test           # runs the automated checks
 Put each folder on any static host (they deploy separately, e.g. `ride.example.com` and
 `drive.example.com`). Location needs `https://`. Browsers stop GPS when the tab is in the
 background, so the driver app keeps the screen awake while online (where the browser allows it). A driver can go
-online only with a good GPS fix (about 200 m or better), so a laptop's Wi-Fi position never shows up as a car.
+online with a good GPS fix (about 200 m or better) or an approximate one (up to 25 km), so a phone's "approximate location" works, but a laptop's rough IP position (or a stale one) never shows up as a car.
 
 **One repository per app.** `trevthom/nostr-ride-rider` and `trevthom/nostr-ride-driver` are generated
 from this repository. Edit code here, then run `node scripts/export-apps.mjs --push`.

@@ -12,6 +12,7 @@ node scripts/e2e/ride.mjs            # a standard-fare ride: fund, request, acce
 FLAT=1 node scripts/e2e/ride.mjs     # the same with a flat price
 node scripts/e2e/missed.mjs          # a wallet that runs dry: two missed payments, the driver finishes, refill, waiver and refund
 node scripts/e2e/stop.mjs            # an extra stop turns a flat price into the driver's normal fare
+node scripts/e2e/nav.mjs             # tab bar always visible, back arrow, X to cancel, pin the pickup, driver online on an approximate (3 km) location
 ```
 
 Each run builds both apps first (set `E2E_NOBUILD=1` to reuse `dist/`). The runs print one line per step and exit with code 0 only
