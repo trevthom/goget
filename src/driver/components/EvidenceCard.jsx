@@ -1,14 +1,16 @@
 // ════════════════════════════════════════════════════════════
 //  EVIDENCE CARD (driver) — What the rider's signed records say about
-//  this ride: the deposit and the rest of the fare, and whether the
-//  rider confirmed boarding and the end of the trip. Payment records are
-//  re-checked HERE, against the driver's own Lightning server, never taken
-//  on the rider's word. "Copy trip record" gives a dispute bundle.
+//  this ride: the ecash payments (ticks) and how each was answered, any tip
+//  sent over Lightning, and whether the rider confirmed boarding and the end
+//  of the trip. A tip record is re-checked HERE, against the driver's own
+//  Lightning server, never taken on the rider's word. "Copy trip record"
+//  gives a dispute bundle.
 // ════════════════════════════════════════════════════════════
 
 import { useEffect, useState } from "react";
 import { useApp } from "../../state/AppContext.jsx";
 import { rideConfirm } from "../../lib/rides.js";
+import { ticksOf, tickReplies, paidSats } from "../../lib/payments.js";
 import { paymentRecords, verifyPayment, disputeRecord } from "../../lib/evidence.js";
 import Money from "../../ui/Money.jsx";
 import Icon from "../../ui/Icon.jsx";
@@ -43,17 +45,29 @@ export default function EvidenceCard({ request }) {
   return (
     <div className="rounded-2xl border border-neutral-200 p-4 mt-5">
       <h2 className="text-xs font-semibold uppercase tracking-wider text-neutral-500 mb-2">Trip record</h2>
-      {[...["deposit", "rest"].map((phase) => records.find((x) => x.phase === phase) || { phase, missing: true }), ...records.filter((x) => x.phase === "tip")].map((r) => {
-        if (r.missing && r.phase === "deposit") return null;
+      {(() => {
+        const ticks = ticksOf(request), replies = tickReplies(request);
+        const refused = ticks.filter((t) => replies.get(t.id)?.ok === false).length;
+        const waiting = ticks.filter((t) => !replies.has(t.id)).length;
+        return (
+          <div className="py-1.5 text-[15px]">
+            <div className="flex justify-between">
+              <span className="font-medium">Ecash payments</span>
+              <Money sats={paidSats(request)} />
+            </div>
+            <p className="text-xs text-neutral-600">
+              {ticks.length} sent · {ticks.length - refused - waiting} received{refused ? ` · ${refused} refused by the mint` : ""}{waiting ? ` · ${waiting} waiting` : ""}
+            </p>
+          </div>
+        );
+      })()}
+      {records.filter((x) => x.phase === "tip").map((r) => {
         const k = `${r.phase}:${r.at}`;
-        const [text, cls] = !r.missing ? LABEL[checks[k] || "unverified"] : ["Waiting for the rider's payment record.", "text-neutral-500"];
+        const [text, cls] = LABEL[checks[k] || "unverified"];
         return (
           <div key={k} className="py-1.5 text-[15px]">
-            <div className="flex justify-between">
-              <span className="font-medium">{r.phase === "deposit" ? "Deposit" : r.phase === "tip" ? "Tip" : "Rest of the fare"}</span>
-              {!r.missing && <Money sats={r.amountSats} />}
-            </div>
-            <p className={`text-xs ${cls}`}>{!r.missing ? (checks[k] ? text : "Checking…") : text}</p>
+            <div className="flex justify-between"><span className="font-medium">Tip</span><Money sats={r.amountSats} /></div>
+            <p className={`text-xs ${cls}`}>{checks[k] ? text : "Checking…"}</p>
           </div>
         );
       })}

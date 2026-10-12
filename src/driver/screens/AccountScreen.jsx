@@ -1,8 +1,9 @@
 // ════════════════════════════════════════════════════════════
 //  ACCOUNT (driver) — Profile, what is needed to drive (vehicle,
 //  license photo, Lightning address; the banner names what is still
-//  missing), optional gender, driving settings (deposit %, request radius,
-//  alerts), wallet, contact methods, relays, keys, log out.
+//  missing), currency, your rates (frozen while a ride runs), the ecash wallet and the mint you
+//  are paid at, optional gender, driving settings (request radius, alerts), the Lightning wallet,
+//  contact methods, relays, keys, log out.
 // ════════════════════════════════════════════════════════════
 
 import { useApp } from "../../state/AppContext.jsx";
@@ -16,15 +17,17 @@ import TypicalFareSection from "../../features/profile/TypicalFareSection.jsx";
 import { driveGaps, gapsText } from "../../lib/profile.js";
 import LightningAddressSection from "../../features/profile/LightningAddressSection.jsx";
 import WalletSection from "../../features/profile/WalletSection.jsx";
+import EcashSection from "../../features/ecash/EcashSection.jsx";
+import CurrencySection from "../../features/profile/CurrencySection.jsx";
 import KeysSection from "../../features/profile/KeysSection.jsx";
 import Icon from "../../ui/Icon.jsx";
 
-const DEPOSITS = [0, 10, 20, 30, 50];
 const GENDERS = [["", "Not set"], ["female", "Female"], ["male", "Male"]];
 
 export default function AccountScreen() {
   const { user } = useApp();
-  const { driveReady, depositPct, setDepositPct, radius, setRadius, alerts, setAlerts } = useDriver();
+  const { driveReady, activeDrive, radius, setRadius, alerts, setAlerts } = useDriver();
+  const onRide = !!activeDrive; // rates and the mint are frozen while a ride runs
   const save = useSaveProfile();
   const saveLicense = useSaveLicense();
   const gaps = driveGaps(user);
@@ -49,7 +52,9 @@ export default function AccountScreen() {
         <LicenseSection picture={user.license || ""} onSave={saveLicense} />
         <LightningAddressSection value={user.lud16 || ""} onSave={(lud16) => save({ lud16 })} />
 
-        <TypicalFareSection rates={user.rates} onSave={(rates) => save({ rates })} />
+        <CurrencySection />
+        <TypicalFareSection rates={user.rates} onSave={(rates) => save({ rates })} locked={onRide} />
+        <EcashSection locked={onRide} />
 
         <section>
           <SectionLabel>Gender (optional)</SectionLabel>
@@ -69,18 +74,6 @@ export default function AccountScreen() {
         <section>
           <SectionLabel>Driving</SectionLabel>
           <div className="space-y-4">
-            <div>
-              <p className="font-medium">Deposit when you accept</p>
-              <p className="text-sm text-neutral-500 mb-2">Paid by the rider up front to cover your drive to them. Not refunded if they cancel after you are on the way.</p>
-              <div className="flex gap-2" role="group" aria-label="Deposit percent">
-                {DEPOSITS.map((p) => (
-                  <button key={p} type="button" aria-pressed={depositPct === p} onClick={() => setDepositPct(p)}
-                    className={`flex-1 py-2.5 rounded-full text-sm font-semibold ${depositPct === p ? "bg-black text-white" : "bg-neutral-100 text-neutral-700"}`}>
-                    {p === 0 ? "None" : `${p}%`}
-                  </button>
-                ))}
-              </div>
-            </div>
             <div className="flex items-center gap-3">
               <div className="flex-1">
                 <p className="font-medium">Request radius</p>

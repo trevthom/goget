@@ -1,19 +1,31 @@
 // ════════════════════════════════════════════════════════════
 //  DRIVE TRIP (driver) — A confirmed ride, in three steps that the driver
 //  moves forward with signed stage markers the rider's app reacts to:
-//    to pickup   → "I've arrived"
-//    at pickup   → "Start trip"
-//    trip        → "Complete trip"
+//    to pickup   → "I've arrived" (works only within 50 m of the pickup)
+//    at pickup   → "Start trip" (after both people typed the other's 2-digit code)
+//    trip        → "Finish ride"
 //  The rider's exact pickup/dropoff arrives sealed (NIP-44) with the
 //  rider's confirmation; until then only the approximate area is known.
 //  The driver's live location is sent to the rider by DriverContext.
+//  While the rider rides, the screen shows what the ride has earned and what the rider has paid
+//  (ecash ticks). After two missed payments the driver may finish the ride. Either person can
+//  finish the ride at any time (after a confirmation): there are no cancellations and no fees, the
+//  rider pays what the ride earned. A rider's extra stop is accepted here, or the ride is finished.
 // ════════════════════════════════════════════════════════════
 
 import { useEffect, useRef, useState } from "react";
 import { ARRIVE_RADIUS_METERS } from "../../config/settings.js";
 import { useApp } from "../../state/AppContext.jsx";
 import { useDriver } from "../state/DriverContext.jsx";
-import { rideConfirm, rideStage, rideTimes } from "../../lib/rides.js";
+import { rideConfirm, rideStage, rideTimes, rideKey } from "../../lib/rides.js";
+import { startCode, checkCode, attemptGate, recordAttempt } from "../../lib/startcode.js";
+import { canMarkArrived } from "../../lib/arrival.js";
+import { fullTrip, nextStop, stopChanges, readStop } from "../../lib/stops.js";
+import { MISSED_LIMIT } from "../../lib/ticks.js";
+import { rideTerms } from "../../lib/terms.js";
+import { useRideLink } from "../../features/payments/useRideLink.js";
+import { getSetting, setSetting } from "../../config/relays.js";
+import { moneyText } from "../../ui/Money.jsx";
 import { meterView } from "../../lib/meter.js";
 import TripMeter, { peekMeter } from "../../ui/TripMeter.jsx";
 import { exactTrip } from "../../lib/privacy.js";
@@ -37,7 +49,8 @@ const mmss = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
 export default function DriveTrip({ request }) {
   const { user, liveTick, pushNotice } = useApp();
-  const { myPosition, arrive, startTrip, completeTrip, cancelDrive, answerPickup, odo, agreed } = useDriver();
+  const { myPosition, gps, arrive, startTrip, finishRide, answerPickup, answerStop, odo, agreed, driveMoney } = useDriver();
+  const { btcPrice } = useApp();
   const stage = rideStage(request);
   const exact = exactTrip(request, user);
   const trip = exact || parse(request);
@@ -45,7 +58,12 @@ export default function DriveTrip({ request }) {
   const accept = acceptFor(request, user.publicKey);
   const paid = accept ? parse(accept) : null;
   const [contact, setContact] = useState(false);
-  const [ask, setAsk] = useState(null); // "complete" | "cancel"
+  const [ask, setAsk] = useState(null); // "finish" | "unpaid"
+  const [typed, setTyped] = useState("");
+  const [gate, setGate] = useState(null); // wrong-code tries
+  const [codeMsg, setCodeMsg] = useState("");
+  const [riderCodeOk, setRiderCodeOk] = useState(false); // the driver typed the rider's code
+  const [dismissedMissed, setDismissedMissed] = useState(0); // "rider still with me": hide the missed-payments card until it grows
   const [now, setNow] = useState(Date.now());
   const [arrivedAt, setArrivedAt] = useState(null);
   const [routeInfo, setRouteInfo] = useState(null); // road time from the map's route
@@ -54,20 +72,35 @@ export default function DriveTrip({ request }) {
   useEffect(() => { const id = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(id); }, []);
   useEffect(() => { if (stage === "arrived" && !arrivedAt) setArrivedAt(Date.now()); }, [stage]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const { pickup, dropoff } = trip;
+  const { pickup } = trip;
+  // The trip with the stops and destination change the driver accepted; while riding the car heads for the next stop.
+  const full = fullTrip(request, user);
+  const stops = full?.stops || [];
+  const dropoff = full?.dropoff || trip.dropoff;
+  const key = rideKey(request);
+  const [passed, setPassed] = useState(() => getSetting("stopsPassed", {})[key] || 0);
   // The rider asked to move the pickup. Until the driver accepts, the first one stays.
   const change = pickupChange(request);
   const pendingChange = stage === "enroute" && change?.status === "pending" ? change : null;
   const proposed = pendingChange ? readPickup(pendingChange.proposal, request, user) : null;
   const shiftMiles = proposed ? haversineDistance(pickup.lat, pickup.lng, proposed.lat, proposed.lng) : null;
-  const target = stage === "riding" ? dropoff : pickup;
+  const target = stage === "riding" ? nextStop(stops, dropoff, passed) : pickup;
+  useEffect(() => {
+    if (stage !== "riding" || !myPosition || !stops[passed]) return;
+    if (haversineDistance(myPosition.lat, myPosition.lng, stops[passed].lat, stops[passed].lng) * 1609.344 <= ARRIVE_RADIUS_METERS) {
+      setPassed(passed + 1);
+      setSetting("stopsPassed", { ...getSetting("stopsPassed", {}), [key]: passed + 1 });
+    }
+  }, [myPosition?.lat, myPosition?.lng, stage, stops.length, passed]); // eslint-disable-line react-hooks/exhaustive-deps
   const miles = myPosition ? haversineDistance(myPosition.lat, myPosition.lng, target.lat, target.lng) : null;
   // Minutes left: the road route from the car when the router answered, else a straight-line guess.
   const eta = miles == null ? null : routeInfo && !routeInfo.straight ? routeInfo.minutes : pickupEta(miles);
-  const offer = offerFrom(request, user.publicKey); // the fare this driver agreed to
+  const offer = offerFrom(request, user.publicKey); // the offer this driver made (its rates are frozen for the ride)
   const fare = offer ? parse(offer)?.priceSats : parse(request)?.fareSats;
-  // The line always starts at the car, so it shows what is LEFT of the trip.
-  const route = myPosition ? [{ lat: r3(myPosition.lat), lng: r3(myPosition.lng) }, target] : stage === "riding" ? [pickup, dropoff] : null;
+  const flatOffer = parse(offer || { content: "{}" })?.mode === "flat" && rideTerms(request)?.mode === "flat";
+  // The line always starts at the car, so it shows what is LEFT of the trip (through the stops still ahead).
+  const ahead = [...stops.slice(passed), dropoff];
+  const route = myPosition ? [{ lat: r3(myPosition.lat), lng: r3(myPosition.lng) }, ...(stage === "riding" ? ahead : [pickup])] : stage === "riding" ? [pickup, ...stops, dropoff] : null;
   const navUrl = exact ? `https://www.google.com/maps/dir/?api=1&destination=${target.lat},${target.lng}&travelmode=driving` : null;
 
   // Close to where the next step happens? Suggest it (never done for the driver).
@@ -78,7 +111,7 @@ export default function DriveTrip({ request }) {
     const k = `${request.id}|${stage}`;
     if (nearTarget && nudged.current !== k) {
       nudged.current = k;
-      pushNotice(stage === "riding" ? "You're at the destination. Complete the trip when the rider gets out." : "You're at the pickup. Tap I've arrived.");
+      pushNotice(stage === "riding" ? "You're at the next stop. Finish the ride when the rider gets out." : "You're at the pickup. Tap I've arrived.");
     }
   }, [nearTarget, stage]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -92,11 +125,43 @@ export default function DriveTrip({ request }) {
   });
   const meterText = peekMeter(view);
 
+  // Arrival: the button works only within 50 m of the pickup on a good GPS fix.
+  const arrival = canMarkArrived({ pos: myPosition, status: gps, pickup });
+  const canArrive = !!exact && arrival.ok;
+
+  // Starting: each phone shows its own 2-digit code; the driver types the code on the rider's phone, and the rider
+  // types the code on the driver's phone (a signed "code" confirmation).
+  const confirmNow = rideConfirm(request);
+  const gateState = attemptGate(gate, Date.now());
+  const myCode = startCode(user.sk, request.pubkey, key, "driver");
+  const riderCode = startCode(user.sk, request.pubkey, key, "rider");
+  const enterCode = () => {
+    if (!gateState.open) return;
+    const ok = checkCode(typed, riderCode);
+    setGate(recordAttempt(gate, ok, Date.now()));
+    if (ok) { setRiderCodeOk(true); setCodeMsg(""); setTyped(""); }
+    else setCodeMsg("That is not the code on your rider's phone. Ask your rider to read it to you.");
+  };
+  const mismatchBoarded = confirmNow.boarded && !confirmNow.boarded.ok;
+  const canStart = riderCodeOk && !!confirmNow.code?.ok && !mismatchBoarded;
+
+  // Money: what the ride has earned, what the rider has paid, how many payments are missed.
+  const riding = stage === "riding";
+  const missed = driveMoney?.missed || 0;
+  const showMissed = riding && missed >= MISSED_LIMIT && missed > dismissedMissed;
+  const link = useRideLink({
+    request, role: "driver", otherHeardAt: agreed?.at ?? null, active: riding,
+    onSilence: ({ cutoff }) => finishRide(request, { reason: "silence", cutoff }),
+  });
+  const pendingStop = stopChanges(request).filter((c) => c.status === "pending").pop();
+  const stopPlace = pendingStop ? readStop(pendingStop, request, user) : null;
+  const atEnd = !!exact && riding && haversineDistance(myPosition?.lat ?? 0, myPosition?.lng ?? 0, dropoff.lat, dropoff.lng) * 1609.344 <= ARRIVE_RADIUS_METERS && !stops.slice(passed).length;
+
   const title =
     pendingChange ? "Rider changed the pickup"
     : stage === "enroute" ? `Pick up ${profile?.name || "your rider"}`
     : stage === "arrived" ? `Waiting for ${profile?.name || "your rider"}`
-    : `Drop off at ${dropoff.name}`;
+    : `Drop off at ${target.name}`;
   const sub =
     stage === "enroute" ? `${eta != null ? `${eta} min · ` : ""}${pickup.name}`
     : stage === "arrived" ? `Waiting ${mmss(Math.max(0, Math.floor((now - (arrivedAt || now)) / 1000)))} · ${pickup.name}`
@@ -160,6 +225,56 @@ export default function DriveTrip({ request }) {
           </p>
         )}
 
+        {/* What the ride has earned and what the rider has paid, tick by tick */}
+        {riding && (
+          <div className="mt-3 rounded-2xl bg-neutral-100 px-4 py-3" role="group" aria-label="Fare so far">
+            <div className="flex items-baseline justify-between">
+              <span className="text-sm text-neutral-600">Fare so far</span>
+              <Money sats={driveMoney?.owed || 0} className="text-xl font-extrabold" />
+            </div>
+            <div className="flex items-baseline justify-between text-sm mt-1">
+              <span className="text-neutral-600">Paid by the rider</span>
+              <Money sats={driveMoney?.paid || 0} className="font-semibold" />
+            </div>
+            <p className="text-xs text-neutral-500 mt-2">
+              {flatOffer ? "Flat price: it does not grow with traffic or detours. " : ""}Your rates are frozen for this ride. Payments arrive in your ecash wallet as the ride runs.
+            </p>
+          </div>
+        )}
+        {showMissed && (
+          <div className="mt-3 rounded-2xl border-2 border-amber-500 bg-amber-50 px-4 py-3" role="alert">
+            <p className="font-bold text-amber-900">Your rider missed {missed} payments.</p>
+            <p className="text-sm text-amber-900 mt-0.5">You can finish the ride now. The rider can still refill their wallet and pay what is missed, including these payments.</p>
+            <div className="flex gap-2 mt-3">
+              <Button size="md" variant="danger" onClick={() => setAsk("unpaid")}>Finish ride</Button>
+              <Button size="md" variant="secondary" onClick={() => setDismissedMissed(missed)}>Rider still with me</Button>
+            </div>
+          </div>
+        )}
+        {link.askVouch && (
+          <div className="mt-3 rounded-2xl bg-amber-50 text-amber-900 px-4 py-3" role="alert">
+            <p className="text-sm font-semibold">Your rider's phone has been quiet for {Math.floor(link.quiet / 60000)} min.</p>
+            <p className="text-xs mt-0.5">The ride does not end by itself. If your rider is still in the car (a flat battery, no signal), tap below. If both phones stay silent for 10 minutes, the ride finishes at the last signal.</p>
+            <Button size="md" variant="secondary" className="mt-2" onClick={link.vouch}>Rider still with me</Button>
+          </div>
+        )}
+        {pendingStop && (
+          <div className="mt-3 rounded-2xl border-2 border-black p-4" role="group" aria-label="Stop request">
+            <p className="font-bold">{pendingStop.mode === "destination" ? "The rider asks for a new destination" : "The rider asks to add a stop"}</p>
+            <p className="text-[15px] mt-1 font-semibold">{stopPlace?.name || "The place can't be read yet."}</p>
+            <p className="text-xs text-neutral-600 mt-2">
+              {flatOffer
+                ? "If you accept, the flat price becomes your normal fare (base rate plus each mile and minute), counted from the start of the ride. The rider has been told."
+                : "If you accept, the rider keeps paying your normal fare for the extra distance and time."}
+              {" "}You can also finish the ride instead.
+            </p>
+            <div className="flex gap-2 mt-3">
+              <Button size="md" variant="go" disabled={!stopPlace} onClick={() => answerStop(request, pendingStop.id, true)}>Accept</Button>
+              <Button size="md" variant="secondary" onClick={() => setAsk("finish")}>Finish ride</Button>
+            </div>
+          </div>
+        )}
+
         {(() => {
           const c = rideConfirm(request);
           if (c.problem) return <p className="mt-3 text-sm text-red-700 bg-red-50 rounded-xl px-3 py-2" role="alert">The rider reported a problem: {c.problem.note || "no details"}</p>;
@@ -192,47 +307,88 @@ export default function DriveTrip({ request }) {
           {fare > 0 && (
             <div className="text-right">
               <Money sats={fare} stacked className="font-bold" />
-              {paid?.paidSats > 0 && <p className="text-xs text-neutral-500">{paid.verified ? "deposit received" : "deposit paid*"}</p>}
+              <p className="text-xs text-neutral-500">{flatOffer ? "flat price" : "estimate"}</p>
             </div>
           )}
         </div>
-        {paid?.paidSats > 0 && !paid.verified && (
-          <p className="text-xs text-neutral-500 mt-1">*The rider says the deposit is paid. Check your wallet.</p>
-        )}
 
         {nearTarget && (
           <p className="mt-3 text-sm font-medium text-[#05944f] bg-[#e6f4ec] rounded-xl px-3 py-2" role="status">
-            {stage === "riding" ? "You're at the destination." : "You're at the pickup. Let the rider know."}
+            {stage === "riding" ? "You're at the next stop." : "You're close to the pickup. Get within 50 m to mark your arrival."}
           </p>
         )}
+
+        {/* Starting the ride: both people confirm they are at the car with a 2-digit code */}
+        {stage === "arrived" && !mismatchBoarded && (
+          <div className="mt-4 rounded-2xl border-2 border-black p-4" role="group" aria-label="Start code">
+            <p className="font-bold">Start the ride</p>
+            <p className="text-xs text-neutral-600 mb-3">Both of you must be at the car. Show your code to your rider, and type the code on your rider's phone.</p>
+            <div className="flex items-center justify-between rounded-xl bg-neutral-100 px-4 py-3">
+              <span className="text-sm text-neutral-600">Your code</span>
+              <span className="text-3xl font-extrabold tracking-widest tabular-nums" aria-label={`Your code is ${myCode}`}>{myCode}</span>
+            </div>
+            <p className={`text-sm mt-2 ${confirmNow.code?.ok ? "text-[#05944f] font-medium" : "text-neutral-500"}`}>
+              {confirmNow.code?.ok ? "Your rider typed your code." : "Waiting for your rider to type your code."}
+            </p>
+            {riderCodeOk ? (
+              <p className="mt-2 text-sm text-[#05944f] font-medium flex items-center gap-1"><Icon name="check" size={16} /> You typed your rider's code.</p>
+            ) : (
+              <div className="mt-3">
+                <label className="block text-sm font-semibold mb-1" htmlFor="rider-code">Your rider's code</label>
+                <div className="flex gap-2">
+                  <input id="rider-code" inputMode="numeric" autoComplete="off" maxLength={2} value={typed}
+                    onChange={(e) => { setTyped(e.target.value.replace(/\D/g, "")); setCodeMsg(""); }}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); enterCode(); } }}
+                    placeholder="00" className="w-24 bg-neutral-100 rounded-xl px-4 py-3 text-2xl text-center font-bold tracking-widest focus:outline-none focus:ring-2 focus:ring-black" />
+                  <Button size="md" onClick={enterCode} disabled={typed.length !== 2 || !gateState.open}>Confirm</Button>
+                </div>
+                {!gateState.open && <p className="text-xs text-amber-700 mt-1" role="alert">Too many tries. Wait {Math.ceil(gateState.waitMs / 1000)} s.</p>}
+                {codeMsg && gateState.open && <p className="text-xs text-red-600 mt-1" role="alert">{codeMsg}</p>}
+              </div>
+            )}
+          </div>
+        )}
         <div className="mt-5">
-          {stage === "enroute" && <Button variant="go" className={nearTarget ? "ring-4 ring-[#05944f]/30 animate-pulse" : ""} onClick={() => arrive(request)}>I've arrived</Button>}
-          {stage === "arrived" && <Button variant="go" onClick={() => startTrip(request)}>Start trip</Button>}
-          {stage === "riding" && <Button variant="go" className={nearTarget ? "ring-4 ring-[#05944f]/30 animate-pulse" : ""} onClick={() => setAsk("complete")}>Complete trip</Button>}
-          <Button variant="ghost" size="md" className="mt-1 !text-red-600" onClick={() => setAsk("cancel")}>
-            {stage === "arrived" ? "Cancel (rider didn't show)" : "Cancel trip"}
-          </Button>
+          {stage === "enroute" && (
+            <>
+              <Button variant="go" className={nearTarget ? "ring-4 ring-[#05944f]/30 animate-pulse" : ""} disabled={!canArrive} onClick={() => arrive(request, pickup)}>I've arrived</Button>
+              {!canArrive && <p className="text-xs text-neutral-500 text-center mt-1.5" role="status">{exact ? arrival.reason : "Waiting for the exact pickup."}</p>}
+            </>
+          )}
+          {stage === "arrived" && (
+            <>
+              <Button variant="go" disabled={!canStart} onClick={() => startTrip(request)}>Start trip</Button>
+              {!canStart && <p className="text-xs text-neutral-500 text-center mt-1.5" role="status">{mismatchBoarded ? "Your rider says the car did not match." : "Start when you and your rider have typed each other's code."}</p>}
+            </>
+          )}
+          {stage === "riding" && <Button variant="go" className={atEnd ? "ring-4 ring-[#05944f]/30 animate-pulse" : ""} onClick={() => setAsk("finish")}>Finish ride</Button>}
+          {stage !== "riding" && (
+            <Button variant="ghost" size="md" className="mt-1 !text-red-600" onClick={() => setAsk("finish")}>Finish ride</Button>
+          )}
         </div>
       </Sheet>
 
       <ContactSheet open={contact} onClose={() => setContact(false)} pubkey={request.pubkey} name={profile?.name} />
       <ConfirmDialog
-        open={ask === "complete"}
-        title="Complete this trip?"
-        message="Only complete the trip once the rider is at the destination. The rider can't undo this."
-        confirmLabel="Complete trip"
-        cancelLabel="Not yet"
-        onConfirm={() => { setAsk(null); completeTrip(request); }}
+        open={ask === "finish"}
+        title="Finish this ride?"
+        message={riding
+          ? `${atEnd ? "" : "You are not at the destination. "}The rider pays what the ride has earned so far: the base rate, the miles and the minutes${driveMoney ? ` (${moneyText(driveMoney.owed, btcPrice)})` : ""}. ${flatOffer && atEnd ? "At the destination the whole flat price is owed. " : ""}The ride ends for both of you.`
+          : "The ride has not started, so the rider owes nothing. The ride ends for both of you."}
+        confirmLabel="Finish ride"
+        cancelLabel="Keep driving"
+        danger={!atEnd}
+        onConfirm={() => { setAsk(null); finishRide(request, { reason: atEnd ? "destination" : "driver", atDestination: atEnd }); }}
         onCancel={() => setAsk(null)}
       />
       <ConfirmDialog
-        open={ask === "cancel"}
-        title="Cancel this trip?"
-        message="The rider is told right away and the ride ends for both of you."
-        confirmLabel="Cancel trip"
-        cancelLabel="Keep trip"
+        open={ask === "unpaid"}
+        title="Finish the ride?"
+        message={`Your rider missed ${missed} payments. If you finish now, the rider still owes what is missed and can pay it later after refilling their wallet.`}
+        confirmLabel="Finish ride"
+        cancelLabel="Keep driving"
         danger
-        onConfirm={() => { setAsk(null); cancelDrive(request); }}
+        onConfirm={() => { setAsk(null); finishRide(request, { reason: "unpaid" }); }}
         onCancel={() => setAsk(null)}
       />
     </MapPage>

@@ -1,7 +1,7 @@
 // ════════════════════════════════════════════════════════════
 //  EARNINGS (driver) — Totals for today, this week and all time, and the
-//  list of completed drives. Amounts are the agreed fares (riders pay
-//  you directly over Lightning, so check your wallet for what arrived).
+//  list of finished rides. Amounts are the ecash payments you received while
+//  the ride ran (plus tips). The money is in your ecash wallet (Account).
 // ════════════════════════════════════════════════════════════
 
 import { useEffect, useState } from "react";
@@ -75,7 +75,7 @@ export default function EarningsScreen() {
         </ul>
       )}
       <p className="text-neutral-500 text-xs mt-6">
-        Fares are paid peer to peer over Lightning, straight to your Lightning address. This list shows the agreed fares.
+        Riders pay you in ecash while the ride runs, straight into your wallet. This list shows what arrived for each ride.
       </p>
     </Screen>
   );

@@ -1,8 +1,9 @@
 # NostrRide 🚗⚡
 
 A decentralized ridesharing system built on **Nostr**. No central server, no
-database: every ride is a set of signed Nostr events, and payments go straight
-from rider to driver over **Lightning**.
+database: every ride is a set of signed Nostr events. The rider pays the driver
+**while the ride runs**, in small **ecash** payments (Cashu) from the rider's wallet. There are
+no cancellations and no cancellation fees: either person taps **Finish ride**.
 
 It is **two separate apps** that find each other through Nostr relays:
 
@@ -59,37 +60,40 @@ that password. Use a different account in each app window to play both sides.
 
 **Driver app** (once):
 1. **Account** tab → add a **photo**, your **vehicle** (year, make, model, plate, and a photo of the car), a photo of your **driver's license** (encrypted; only you can open it) and a
-   **Lightning address** (like `you@wallet.com`; riders pay you there).
+   **Lightning address** (like `you@wallet.com`; you cash out there). Check the **ecash mint** you are paid at (*Account → Ecash wallet*).
 2. **Drive** tab → tap the green **GO** button (allow location when asked).
 
 **Rider app:**
-1. **Where to?** → type a destination (pickup fills in from your GPS) → see the **typical fares of nearby drivers** and the suggested price → type
-   **your offer** (any amount, in dollars and cents or sats) → **Request ride**. Optional: show female or male drivers first. (Pick **Schedule** to reserve a ride for later: it waits under *Activity → Upcoming*.)
+0. **Account** → pick your **currency** and add money to your **ecash wallet** (**Add funds**: pay a Lightning invoice, in one tap with a connected wallet).
+1. **Where to?** → type a destination (pickup fills in from your GPS) → choose **Standard fare** (each driver's own rates) or **Flat price** (type your own price, in your currency or sats) → **Request ride**.
+   Optional: show female or male drivers first. (Pick **Schedule** to reserve a ride for later: it waits under *Activity → Upcoming*.)
 2. Wait for **"Finding your driver…"**. Nearby online drivers are shown as cars on the map.
 
 **Driver app:**
-3. A **request card** pops up with the rider's offer, pickup distance and the rider's rating. Tap **Accept**, or **Ask for a different price** and type your counter. Set your own base, per-mile and per-minute rates under *Account → Your typical fare*; riders see them.
+3. A **request card** pops up with the fare, pickup distance and the rider's rating. Tap **Accept**. For a flat price you can also **Ask for a different price** and type your counter. Set your own base, per-mile and per-minute rates under *Account → Your rates*; riders see them, and they are frozen once a rider chooses you.
 
 **Rider app:**
-4. Pick a driver (counter-offers are marked; fastest first) → **pay the deposit** with your connected wallet, or scan the
-   invoice with any Lightning wallet. The ride is confirmed when it is paid.
-5. Watch the car come to you. The driver's exact position is end-to-end encrypted and only you can see it.
+4. Pick a driver (counter-offers are marked; fastest first) → **Confirm driver**. There is **no deposit**; you only need a little ecash at the driver's mint to start.
+5. Watch the car come to you. The driver's exact position is end-to-end encrypted and only you can see it. Nothing is charged yet.
 
 **Driver app:**
-6. Follow the route to the pickup → **I've arrived** → **Start trip** → **Complete trip**.
+6. Follow the route to the pickup → **I've arrived** (works within 50 m of the pickup).
 
-**Rider app:**
-7. Pay the **rest of the fare**, rate your driver, tap **Done**. The driver rates you too, and
-   the trip shows up under *Earnings* (driver) and *Activity* (rider).
+**Both apps:**
+7. Each phone shows a 2-digit code. Type the code on the **other** person's phone. Then the driver taps **Start trip**.
+8. **The rider pays as the ride runs**: the base rate at the start, then every mile and every minute. Both screens show the fare so far.
+9. Either person taps **Finish ride** (and confirms). The rider pays what the ride earned. Rate each other. The driver may waive part of the fare. The trip shows up under *Earnings* (driver) and *Activity* (rider).
 
-**Money:** the deposit (default 20%, the driver can change it) is paid when you choose a driver;
-the rest after the trip. Both go straight to the driver's Lightning address. There is **no
-escrow**, so the deposit is not refunded if you cancel after the driver is on the way.
+**Money:** payments are tiny ecash payments from the rider's wallet to the driver, made while the ride
+runs. If the rider misses **two payments**, the driver may finish the ride; the rider can refill the wallet
+and pay what is missed. A flat price never grows with traffic. Adding a stop turns a flat price into the driver's
+normal fare. All charges are shown in your local currency and paid in sats. A **mint** holds the money behind ecash,
+so use one you trust. Full rules: `docs/index.md`, section *Pay as you ride*.
 
-**Wallet:** *Account* → paste a **real** Nostr Wallet Connect string (`nostr+walletconnect://...`)
-from a wallet that supports NWC (Alby Hub, Coinos…) to pay in one tap. The app reads your real
-balance from that wallet and never shows made-up numbers. Without one you can still pay any
-invoice from another wallet.
+**Wallets:** *Account → Ecash wallet* holds the ecash you ride with. *Account → Lightning Wallet*: paste a **real**
+Nostr Wallet Connect string (`nostr+walletconnect://...`) from a wallet that supports NWC (Alby Hub, Coinos…) to add funds
+and tip in one tap. The app reads your real balance from that wallet and never shows made-up numbers. Without one you can
+still pay any invoice from another wallet.
 
 ---
 
@@ -99,8 +103,7 @@ invoice from another wallet.
   to follow your car live, **SOS**, or report a problem. Before you get in, the app asks you to check the plate,
   car and driver. Add trusted contacts in *Account*.
 - **Block** a driver or rider from their profile or after a trip. Blocked people no longer show up for you.
-- **Disputes:** every payment and confirmation is a signed record. The driver app checks payments against the
-  driver's own Lightning server and can copy a **trip record** for whoever settles a dispute.
+- **Disputes:** every payment and confirmation is a signed record. The driver app counts a payment only when its own mint redeemed it, and can copy a **trip record** for whoever settles a dispute.
 - **Offline:** the apps install to your home screen, open offline, and send queued updates when you are back online.
 - **Background GPS** needs the native app in `native/` (see its README); a browser stops location when the screen sleeps.
 
@@ -123,7 +126,9 @@ invoice from another wallet.
 
 | I want to change... | Open this file |
 |---|---|
-| Suggested-price formula, offer limits, deposit %, request timers, demo data | `src/config/settings.js` |
+| Suggested-price formula, flat-price limits, request timers, demo data | `src/config/settings.js` |
+| The ecash mint a new driver starts with | `VITE_DEFAULT_MINT` in `.env` (see `env.example`) |
+| Currencies, tick and finish rules | `src/lib/currency.js`, `src/lib/ticks.js`, `src/lib/finish.js` |
 | Default relay list | `src/config/relays.js` |
 | Colors | `src/theme.js` (and Tailwind classes in the screens) |
 | What a button looks like (everywhere) | `src/ui/Button.jsx` |

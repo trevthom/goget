@@ -35,8 +35,8 @@ const skip = (p) => /(^|[\\/])(node_modules|dist)([\\/]|$)/.test(p);
 const copy = (from, to) => fs.cpSync(from, to, { recursive: true, filter: (p) => !skip(p) });
 
 const DESC = {
-  rider: 'Uber/Lyft-style: "Where to?", fare quote, find a driver, pay a deposit, watch the car arrive, ride, pay the rest, rate.',
-  driver: "Uber-Driver-style: GO online, incoming request cards, accept, navigate to pickup, arrive / start / complete, earnings.",
+  rider: 'Uber/Lyft-style: "Where to?", fare quote, find a driver, watch the car arrive, start with a 2-digit code, pay the driver in ecash as the ride runs, finish the ride, rate.',
+  driver: "Uber-Driver-style: GO online, incoming request cards, accept, navigate to pickup, arrive (within 50 m) / start code / finish the ride, ecash earnings.",
 };
 const GENERATED = (role) =>
   `> **Generated repository.** This is a copy of the ${role} app made from **${OWNER}/nostr-ride** by \`scripts/export-apps.mjs\`. Make changes in nostr-ride and export again: a hand edit here is overwritten by the next export.\n`;
@@ -101,8 +101,8 @@ function readme(role, other, port) {
   const name = role === "rider" ? "Rider" : "Driver";
   return `# NostrRide ${name} app 🚗⚡
 
-The **${role}** half of NostrRide, a decentralized ridesharing system on **Nostr** with **Lightning**
-payments. No central server, no database. ${DESC[role]}
+The **${role}** half of NostrRide, a decentralized ridesharing system on **Nostr**. The rider pays the driver in **ecash** (Cashu)
+as the ride runs; **Lightning** and **NWC** fill and empty the ecash wallet. No central server, no database. ${DESC[role]}
 
 The other half is in its own repository: **nostr-ride-${other}**. The two apps only talk through
 Nostr relays, so they can be deployed separately.

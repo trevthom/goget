@@ -6,16 +6,19 @@
 //              price tags on the map)
 //    request   an incoming-request card with a countdown: Accept / Decline
 //    waiting   "Waiting for <rider> to confirm" after the driver accepted
-//  The rider names the price. A driver accepts it, or counters with a higher
-//  price. Either way the reply is an offer; the rider picks a driver and pays
-//  the deposit, which starts the drive (DriveTrip).
+//  A rider either accepts each driver's STANDARD fare (the driver's own rates, paid tick by tick) or
+//  names a FLAT price. For a flat price the driver accepts it or counters with a higher one. Either way
+//  the reply is an offer carrying the driver's rates and mint; the rider picks a driver, which starts
+//  the drive (DriveTrip). There is no deposit: the rider pays in ecash as the ride runs.
 // ════════════════════════════════════════════════════════════
 
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "../../state/AppContext.jsx";
-import { useDriver, fareOf, typicalSatsFor } from "../state/DriverContext.jsx";
-import { depositSats, driveMinutes, offerLimitsSats, pickupEta, roadMiles } from "../../lib/fare.js";
-import { FALLBACK_BTC_USD } from "../../config/settings.js";
+import { useDriver, fareOf, typicalSatsFor, shownSats } from "../state/DriverContext.jsx";
+import { driveMinutes, offerLimitsSats, pickupEta, roadMiles, ratesOrApp } from "../../lib/fare.js";
+import { formatFiat } from "../../lib/currency.js";
+import { mintLabel } from "../../lib/mints.js";
+import { getMyMint } from "../../features/ecash/myMint.js";
 import AmountInput from "../../ui/AmountInput.jsx";
 import { haversineDistance } from "../../lib/geo.js";
 import { completedDrives, summarizeEarnings } from "../../lib/earnings.js";
@@ -34,7 +37,7 @@ import RiderInfo, { useRiderInfo } from "../components/RiderInfo.jsx";
 const whenText = (time) => (time === "ASAP" ? "Now" : new Date(time).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" }));
 
 export default function OnlineHome() {
-  const { user, rideRequests, btcUsd, setView } = useApp();
+  const { user, rideRequests, btcPrice, usdPrice, prices, setView } = useApp();
   const { myPosition, online, open, pending, skipped } = useDriver();
   const [focusId, setFocusId] = useState(null); // request opened by hand (list or map tag)
   const [ignored, setIgnored] = useState(null); // offer id the driver stopped waiting on
@@ -49,7 +52,7 @@ export default function OnlineHome() {
   const card = manual || auto;
   const waiting = pending && pending.offer.id !== ignored ? pending : null;
 
-  const pills = online ? open.slice(0, 20).map((o) => ({ id: o.request.id, lat: o.content.pickup.lat, lng: o.content.pickup.lng, text: moneyText(fareOf(o.request, btcUsd), btcUsd) })) : [];
+  const pills = online ? open.slice(0, 20).map((o) => ({ id: o.request.id, lat: o.content.pickup.lat, lng: o.content.pickup.lng, text: moneyText(shownSats(o.request, user.rates, prices, usdPrice), btcPrice) })) : [];
 
   return (
     <MapPage
@@ -72,7 +75,7 @@ export default function OnlineHome() {
             className="mx-auto bg-black text-white rounded-full px-4 py-2.5 text-[15px] font-bold shadow-[0_2px_10px_rgba(0,0,0,0.3)]"
             aria-label="Today's earnings"
           >
-            {moneyText(today.sats, btcUsd)}
+            {moneyText(today.sats, btcPrice)}
           </button>
           <FloatButton icon="locate" label="Center on my location" onClick={() => mapRef.current?.fit()} />
         </>
@@ -119,7 +122,7 @@ function OfflineSheet() {
 }
 
 function OnlineSheet({ onOpen }) {
-  const { btcUsd } = useApp();
+  const { btcPrice, usdPrice, prices, user } = useApp();
   const { goOffline, open, geoError, myPosition, gps } = useDriver();
   return (
     <Sheet label="You're online">
@@ -144,7 +147,7 @@ function OnlineSheet({ onOpen }) {
                     From {c.pickup.name}{miles != null ? ` · ${miles.toFixed(1)} mi away` : ""}{c.time && c.time !== "ASAP" ? ` · ${whenText(c.time)}` : ""}
                   </span>
                 </span>
-                <Money sats={fareOf(request, btcUsd)} className="font-bold" />
+                <Money sats={shownSats(request, user.rates, prices, usdPrice)} className="font-bold" />
                 <Icon name="chevron-right" size={18} className="text-neutral-400" />
               </button>
             </li>
@@ -158,9 +161,8 @@ function OnlineSheet({ onOpen }) {
 // The incoming-request card. `auto` cards count down and then step aside
 // (the request stays open for other drivers); cards opened by hand do not.
 function Incoming({ item, auto, onClose }) {
-  const { btcUsd } = useApp();
-  const { user } = useApp();
-  const { acceptRequest, decline, skip, depositPct } = useDriver();
+  const { user, btcPrice, usdPrice, prices } = useApp();
+  const { acceptRequest, decline, skip } = useDriver();
   const { request, content: c, miles } = item;
   const [left, setLeft] = useState(REQUEST_CARD_SECONDS);
   const [busy, setBusy] = useState(false);
@@ -175,21 +177,21 @@ function Incoming({ item, auto, onClose }) {
   }, [auto, countering]);
   useEffect(() => { if (auto && left <= 0) skip(request); }, [left]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const fare = fareOf(request, btcUsd);
+  const flat = c.fareMode === "flat";
+  const typical = typicalSatsFor(request, user.rates, prices); // this driver's own fare for the trip (null while its price is unknown)
+  const fare = flat ? fareOf(request, usdPrice) : typical ?? fareOf(request, usdPrice);
+  const rates = ratesOrApp(user.rates);
   const tripMiles = c.distanceMiles ?? roadMiles(haversineDistance(c.pickup.lat, c.pickup.lng, c.dropoff.lat, c.dropoff.lng));
   const tripMin = c.durationMin ?? driveMinutes(tripMiles);
   const awayMin = miles != null ? pickupEta(miles) : null;
 
   // A counter-offer can be any amount above the rider's offer, up to 3x the suggested price.
   // It starts at the driver's own typical fare for this trip, if that is higher than the offer.
-  const rate = btcUsd || FALLBACK_BTC_USD;
-  const typical = typicalSatsFor(request, user.rates, btcUsd);
-  const limits = offerLimitsSats(Math.max(c.suggestedSats || 0, fare), btcUsd);
+  const limits = offerLimitsSats(Math.max(c.suggestedSats || 0, fare), usdPrice);
   const [counterSats, setCounterSats] = useState(() => (typical > fare ? typical : Math.round(fare * 1.1)));
   const counterOk = Number.isFinite(counterSats) && counterSats > fare && counterSats <= limits.max;
-  const price = countering && counterOk ? counterSats : fare;
 
-  const accept = () => { if (countering && !counterOk) return; setBusy(true); acceptRequest(request, countering ? Math.round(counterSats) : undefined); };
+  const accept = () => { if (countering && !counterOk) return; setBusy(true); acceptRequest(request, flat && countering ? Math.round(counterSats) : undefined); };
   const dismiss = () => { decline(request); onClose(); };
 
   return (
@@ -203,7 +205,7 @@ function Incoming({ item, auto, onClose }) {
 
       <div className="flex items-end justify-between">
         <div>
-          <p className="text-xs font-semibold text-neutral-500 mb-0.5">Rider's offer</p>
+          <p className="text-xs font-semibold text-neutral-500 mb-0.5">{flat ? "Rider's flat price" : "Your standard fare, about"}</p>
           <Money sats={fare} stacked className="text-4xl font-extrabold tracking-tight" subClassName="text-neutral-500 text-sm" />
         </div>
         <div className="text-right text-sm text-neutral-600">
@@ -228,19 +230,26 @@ function Incoming({ item, auto, onClose }) {
       <div className="mt-4 pt-3 border-t border-neutral-100"><RiderInfo pubkey={request.pubkey} compact /></div>
       {c.notes && <p className="mt-2 text-sm text-neutral-600 bg-neutral-100 rounded-xl px-3 py-2">“{c.notes}”</p>}
 
-      <p className={`text-xs mt-3 ${typical > fare ? "text-amber-700" : "text-neutral-500"}`}>
-        Your typical fare for this trip: {moneyText(typical, btcUsd)}{typical > fare ? ". The offer is below it." : "."}
-      </p>
+      {flat ? (
+        <p className={`text-xs mt-3 ${typical > fare ? "text-amber-700" : "text-neutral-500"}`}>
+          Your standard fare for this trip: {typical != null ? moneyText(typical, btcPrice) : "not known yet"}{typical > fare ? ". The flat price is below it." : "."}
+          {" "}A flat price never grows with traffic or detours.
+        </p>
+      ) : (
+        <p className="text-xs mt-3 text-neutral-500">
+          The rider pays your rates as the ride runs: {formatFiat(rates.base, rates.currency)} base, {formatFiat(rates.perMile, rates.currency)}/mi, {formatFiat(rates.perMinute, rates.currency)}/min.
+        </p>
+      )}
 
-      {countering && (
+      {flat && countering && (
         <div className="mt-3 rounded-2xl bg-neutral-100 px-4 py-3">
           <p className="text-center text-xs font-semibold uppercase tracking-wider text-neutral-500 mb-2">Your counter-offer</p>
           <AmountInput
             sats={counterSats}
-            rate={rate}
+            rate={btcPrice}
             min={fare + 1}
             max={limits.max}
-            minMessage={`Must be more than the rider's offer (${moneyText(fare, btcUsd)}).`}
+            minMessage={`Must be more than the rider's offer (${moneyText(fare, btcPrice)}).`}
             onChange={setCounterSats}
             label="Counter-offer"
           />
@@ -249,18 +258,18 @@ function Incoming({ item, auto, onClose }) {
       )}
 
       <p className="text-xs text-neutral-500 mt-3">
-        You'll ask for a {depositPct}% deposit ({moneyText(depositSats(price, depositPct), btcUsd)}). You get the exact pickup once {profile?.name || "the rider"} confirms you.
+        You are paid in ecash at {mintLabel(getMyMint())} as the ride runs: your base rate at the start, then every mile and every minute. Your rates and mint are frozen once the rider chooses you. You get the exact pickup once {profile?.name || "the rider"} confirms you.
       </p>
 
       <div className="flex gap-3 mt-4">
         <Button variant="secondary" full={false} onClick={dismiss} aria-label="Decline" className="!px-5"><Icon name="x" size={22} /></Button>
         <Button variant="go" onClick={accept} loading={busy} disabled={countering && !counterOk}>
-          {busy ? "Sending…" : countering ? (counterOk ? `Counter ${moneyText(counterSats, btcUsd)}` : "Enter a higher price") : `Accept ${moneyText(fare, btcUsd)}`}
+          {busy ? "Sending…" : flat && countering ? (counterOk ? `Counter ${moneyText(counterSats, btcPrice)}` : "Enter a higher price") : flat ? `Accept ${moneyText(fare, btcPrice)}` : "Accept"}
         </Button>
       </div>
-      {!busy && (
+      {!busy && flat && (
         <button type="button" onClick={() => setCountering((v) => !v)} className="w-full text-center text-sm font-semibold underline mt-3">
-          {countering ? `Accept ${moneyText(fare, btcUsd)} instead` : "Ask for a different price"}
+          {countering ? `Accept ${moneyText(fare, btcPrice)} instead` : "Ask for a different price"}
         </button>
       )}
     </Sheet>
@@ -286,7 +295,7 @@ function Waiting({ pending, onStop }) {
       </div>
       <div className="mt-4 pt-3 border-t border-neutral-100 text-[15px]">
         <p className="font-medium truncate">{c.pickup.name} → {c.dropoff.name}</p>
-        <p className="text-neutral-600 mt-0.5"><Money sats={JSON.parse(offer.content).priceSats} className="font-semibold" /> {JSON.parse(offer.content).priceSats > (c.fareSats || 0) && c.fareSats ? "counter-offer" : "fare"}</p>
+        <p className="text-neutral-600 mt-0.5"><Money sats={JSON.parse(offer.content).priceSats} className="font-semibold" /> {JSON.parse(offer.content).mode !== "flat" ? "standard fare (estimate)" : JSON.parse(offer.content).priceSats > (c.fareSats || 0) && c.fareSats ? "counter-offer" : "flat price"}</p>
       </div>
       <Button variant="secondary" size="md" className="mt-4" onClick={onStop}>Keep browsing requests</Button>
       <p className="text-neutral-500 text-xs text-center mt-2">If the rider still confirms you, the pickup appears right away.</p>
