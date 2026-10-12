@@ -1,6 +1,7 @@
 // A rider whose wallet runs dry: two missed payments, the driver finishes, the rider refills and pays the rest,
 // the driver waives part of the fare and the money goes back. Takes about 6 minutes (the clock is real).
 import { boot, sleep, PICKUP, metersNorth } from "./harness.mjs";
+import { pinPickup } from "./flow.mjs";
 import { tmpdir } from "node:os";
 const SC = tmpdir(); // failure screenshots go here
 const h = await boot({ feePpk: 100, driverRates: { base: 0.5, perMile: 0.5, perMinute: 5, currency: "USD" } });
@@ -44,7 +45,7 @@ try {
     await R.locator('nav[aria-label="Main"]').getByText("Ride", { exact: true }).click();
     await R.getByRole("button", { name: /Where to\?/ }).click();
     await R.getByLabel("Pickup location").waitFor();
-    for (let i = 0; i < 40 && !(await R.getByLabel("Pickup location").inputValue()); i++) await sleep(250);
+    await pinPickup(R);
     await R.getByLabel("Where to?").fill("Blue Grass");
     await R.getByText("Blue Grass Airport", { exact: false }).first().click({ timeout: 10000 });
     await R.getByRole("button", { name: /Request ride · / }).click({ timeout: 15000 });

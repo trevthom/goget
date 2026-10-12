@@ -3,6 +3,7 @@
 // whose outside services (geocoder, router, price feed, map tiles) are mocked. Tailwind's CDN is not reachable in a sandbox,
 // so pages may look unstyled; the runs use the page text and roles, not the looks.
 import { spawn } from "node:child_process";
+import fs from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { startRelay } from "./relay.mjs";
@@ -70,6 +71,9 @@ export async function boot({ feePpk = 0, driverRates = null } = {}) {
       for (let i = 1; i < pts.length; i++) m += Math.hypot((pts[i][0] - pts[i - 1][0]) * 88000, (pts[i][1] - pts[i - 1][1]) * 111000) * 1.3;
       r.fulfill({ json: { routes: [{ geometry: { type: "LineString", coordinates: pts }, distance: m, duration: m / 11 }] } });
     });
+    // Optional: real styling. Tailwind's CDN script is unreachable in a sandbox; E2E_TAILWIND names a script that adds the CSS
+    // (see scripts/e2e/README.md), so the pages look as they do for a user and screenshots mean something.
+    if (process.env.E2E_TAILWIND) await ctx.route(/cdn\.tailwindcss\.com/, (r) => r.fulfill({ body: fs.readFileSync(process.env.E2E_TAILWIND, "utf8"), contentType: "application/javascript" }));
     await ctx.route(/api\.coingecko\.com/, (r) => r.fulfill({ json: { bitcoin: { usd: 100000, eur: 90000, gbp: 80000, jpy: 15000000 } } }));
     await ctx.route(/tile\.openstreetmap\.org|unpkg|fonts\.g/, (r) => r.request().url().includes("tile.openstreetmap") ? r.fulfill({ body: PNG, contentType: "image/png" }) : r.abort());
     const page = await ctx.newPage();

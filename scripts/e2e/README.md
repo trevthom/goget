@@ -19,3 +19,16 @@ Each run builds both apps first (set `E2E_NOBUILD=1` to reuse `dist/`). The runs
 when every step passed and the pages raised no errors. `ride.mjs` and `missed.mjs` use the real clock, so a minute tick takes a real minute.
 
 What they do **not** prove: behaviour against a public mint, a real Lightning wallet, a real phone's GPS, or Tailwind's styling.
+
+## Real styling (optional)
+The app loads Tailwind from a CDN, which a sandbox cannot reach, so the pages are unstyled and a layout problem
+(for example a bar hidden behind a sheet) cannot be seen. To see the real look, build the CSS once and point the runs at it:
+```bash
+mkdir /tmp/tw && cd /tmp/tw && npm init -y && npm i tailwindcss@3
+printf '@tailwind base;\n@tailwind components;\n@tailwind utilities;\n' > in.css
+echo 'module.exports = { content: ["/path/to/nostr-ride/src/**/*.{js,jsx}"] }' > tailwind.config.js
+npx tailwindcss -c tailwind.config.js -i in.css -o out.css
+node -e "const css=require('fs').readFileSync('out.css','utf8'); require('fs').writeFileSync('shim.js','(function(){var s=document.createElement(\"style\");s.textContent='+JSON.stringify(css)+';document.head.appendChild(s);})();')"
+E2E_NOBUILD=1 E2E_TAILWIND=/tmp/tw/shim.js node scripts/e2e/nav.mjs
+```
+The harness answers the CDN request with that script. `page.screenshot()` then shows the screen as a person sees it.

@@ -65,7 +65,7 @@ that password. Use a different account in each app window to play both sides.
 
 **Rider app:**
 0. **Account** → pick your **currency** and add money to your **ecash wallet** (**Add funds**: pay a Lightning invoice, in one tap with a connected wallet).
-1. **Where to?** → type a destination (pickup fills in from your GPS) → choose **Standard fare** (each driver's own rates) or **Flat price** (type your own price, in your currency or sats) → **Request ride**.
+1. **Where to?** → set the pickup (type an address or a business name, or pin it on the map) and the destination → choose **Standard fare** (each driver's own rates) or **Flat price** (type your own price, in your currency or sats) → **Request ride**.
    Optional: show female or male drivers first. (Pick **Schedule** to reserve a ride for later: it waits under *Activity → Upcoming*.)
 2. Wait for **"Finding your driver…"**. Nearby online drivers are shown as cars on the map.
 

@@ -1,6 +1,14 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { fileURLToPath } from "node:url";
+import { execSync } from "node:child_process";
+
+// "2026-10-12 21:30 UTC · 9dbe842": the build time, and the commit when git is available (a host without git shows only the time).
+const buildId = () => {
+  let sha = "";
+  try { sha = execSync("git rev-parse --short HEAD", { stdio: ["ignore", "pipe", "ignore"] }).toString().trim(); } catch { /* no git here */ }
+  return new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC" + (sha ? " · " + sha : "");
+};
 
 // One repo, two separate apps. The Vite "mode" picks which one:
 //   vite --mode rider    → apps/rider  (port 5173, builds to dist/rider)
@@ -14,7 +22,7 @@ export default defineConfig(({ mode }) => {
     root: `apps/${role}`,
     envDir: fileURLToPath(new URL(".", import.meta.url)), // .env lives at the repo root
     plugins: [react()],
-    define: { __APP_ROLE__: JSON.stringify(role) },
+    define: { __APP_ROLE__: JSON.stringify(role), __BUILD_ID__: JSON.stringify(buildId()) },
     server: {
       port: role === "driver" ? 5174 : 5173,
       // The pages live in apps/<role> but import from the repo's src/.

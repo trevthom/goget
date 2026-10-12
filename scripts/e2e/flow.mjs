@@ -9,6 +9,15 @@ export const openSheet = async (p) => { const b = p.getByRole("button", { name: 
 export const satsIn = async (loc) => num(await loc.first().locator(":scope").getByText(/^[\d,]+ sats$/).first().innerText().catch(() => "0"));
 export const geo = (c, p) => c.setGeolocation({ latitude: p.lat, longitude: p.lng, accuracy: 10 });
 
+// The pickup is never filled in by the app: pin it on the map (the pin starts at the phone's position).
+export async function pinPickup(R) {
+  await R.getByLabel("Pickup location").waitFor();
+  await tap(R.getByRole("button", { name: /Set pickup on the map/ }));
+  await R.getByText("100 Main St, Lexington").first().waitFor({ timeout: 15000 });
+  await tap(R.getByRole("button", { name: "Confirm pickup" }));
+  await R.getByText("Plan your ride").waitFor({ timeout: 10000 });
+}
+
 export function makeLog() {
   const t0 = Date.now();
   return (...a) => console.log(`[${String(Math.round((Date.now() - t0) / 1000)).padStart(3)}s]`, ...a);
@@ -41,7 +50,7 @@ export async function rideToRiding(h, opts = {}) {
     await R.locator('nav[aria-label="Main"]').getByText("Ride", { exact: true }).click();
     await R.getByRole("button", { name: /Where to\?/ }).click();
     await R.getByLabel("Pickup location").waitFor();
-    for (let i = 0; i < 40 && !(await R.getByLabel("Pickup location").inputValue()); i++) await sleep(250);
+    await pinPickup(R);
     await R.getByLabel("Where to?").fill("Blue Grass");
     await R.getByText("Blue Grass Airport", { exact: false }).first().click({ timeout: 10000 });
     await R.getByText("Standard fare", { exact: true }).waitFor({ timeout: 15000 });

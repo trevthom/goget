@@ -1,4 +1,5 @@
 import { boot, sleep, PICKUP, DEST, metersNorth } from "./harness.mjs";
+import { pinPickup } from "./flow.mjs";
 import { tmpdir } from "node:os";
 const SC = tmpdir(); // failure screenshots go here
 const FLAT = process.env.FLAT === "1";
@@ -52,7 +53,7 @@ try {
     await R.getByRole("button", { name: /Where to\?/ }).click();
     await R.getByLabel("Where to?").waitFor();
     await R.getByLabel("Pickup location").waitFor();
-    for (let i = 0; i < 40 && !(await R.getByLabel("Pickup location").inputValue()); i++) await sleep(250);
+    await pinPickup(R);
     await R.getByLabel("Where to?").fill("Blue Grass");
     await R.getByText("Blue Grass Airport", { exact: false }).first().click({ timeout: 10000 });
     await R.getByText("Standard fare", { exact: true }).waitFor({ timeout: 15000 });
