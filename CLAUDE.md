@@ -27,7 +27,7 @@ Look: white UI, black buttons, bottom sheets over a full-screen map (Inter font)
   `build:rider` / `build:driver` build one. `preview:rider` / `preview:driver` serve a build.
 - `npm test` → Node's built-in test runner over `test/*.test.mjs` (no extra deps):
   trust rules, ride stages, finishing a ride, fares, trips, earnings, privacy, history, LNURL, geocode, publish,
-  event ordering, contact links, GPS quality, payment evidence, blocking, trip sharing, native location, outbox, relay health (`relayhealth`), flat offers / driver rates + currencies / exact amounts / tips / pickup change / odometer + 5% rule + GPS gap / stage times / relay filter shape / gender order / driver requirements / **ticks (standard + flat), missed payments, final tick, start code, 50 m arrival, silence, waivers, extra stops, frozen rates (`ticks`, `ridepay`, `rideflow`), the ecash wallet (`ecash`) and the real `@cashu/cashu-ts` client against a local test mint (`cashu-adapter`, helpers in `test/helpers/`)**. Run it after touching `lib/*`, `nostr/*`, `features/payments/*`.
+  event ordering, contact links, GPS quality, payment evidence, blocking, trip sharing, native location, outbox, relay health (`relayhealth`), request expiry / blocking both ways / declined offers (`requests`), flat offers / driver rates + currencies / exact amounts / tips / pickup change / odometer + 5% rule + GPS gap / stage times / relay filter shape / gender order / driver requirements / **ticks (standard + flat), missed payments, final tick, start code, 50 m arrival, silence, waivers, extra stops, frozen rates (`ticks`, `ridepay`, `rideflow`), the ecash wallet (`ecash`) and the real `@cashu/cashu-ts` client against a local test mint (`cashu-adapter`, helpers in `test/helpers/`)**. Run it after touching `lib/*`, `nostr/*`, `features/payments/*`.
 - `scripts/e2e/` → optional browser end-to-end run (a rider and a driver, a local relay, the local test mint). Needs `npm i --no-save ws playwright`. Not part of `npm test`.
 - `node scripts/export-apps.mjs [--push] [--only rider|driver] [--out DIR]` → generates the standalone
   `trevthom/nostr-ride-rider` / `nostr-ride-driver` repos (generated mirrors: never edit them; change code here, re-export).
@@ -152,7 +152,7 @@ src/
     components/ PlaceSearch, PinPicker (drag the map under a pin → the pickup), GenderPref, ChangePickup, AddStop, FareTerms, TipSheet, DriverInfo (+ Plate, useDriverInfo)
   driver/
     App.jsx  state/DriverContext.jsx  state/useDriveOdometer.js
-    screens/ HomeScreen (dispatch) Onboarding OnlineHome (offline GO / online / incoming card / waiting)
+    screens/ HomeScreen (dispatch) Onboarding OnlineHome (offline GO / online / incoming card / waiting) NearbyRequests (the list)
              DriveTrip  DriveSummary  EarningsScreen  AccountScreen
     components/ RiderInfo, Checklist
 test/*.test.mjs
@@ -162,7 +162,7 @@ test/*.test.mjs
 | Kind | Name | Key tags | Content (JSON) |
 |---|---|---|---|
 | 0 | METADATA | — | `{name, about, communication[], picture, lud16, gender?, rates?, vehicle}` (+ fields from other apps, kept on merge) |
-| 30078 | RIDE_REQUEST | `d`(id), `t`, `p`(driver, once confirmed) | `{pickup, dropoff, time, notes, status, fareMode, fareSats, suggestedSats, distanceMiles, durationMin, sealed}` — pickup/dropoff are COARSE; `sealed` = exact trip, NIP-44 to the rider. `fareMode` = `"standard"` (each driver's rates; `fareSats` is only an estimate) or `"flat"` (`fareSats` is the RIDER'S FLAT PRICE); older requests lack both (the driver app estimates); `suggestedSats` is what the app suggested. `status` ∈ `requested \| in_progress \| closed` (old: `cancelled`) |
+| 30078 | RIDE_REQUEST | `d`(id), `t`, `p`(driver, once confirmed) | `{pickup, dropoff, time, notes, status, hide?, fareMode, fareSats, suggestedSats, distanceMiles, durationMin, sealed}` — `hide` = hide tokens of the drivers the rider blocked (lib/blocks.js); pickup/dropoff are COARSE; `sealed` = exact trip, NIP-44 to the rider. `fareMode` = `"standard"` (each driver's rates; `fareSats` is only an estimate) or `"flat"` (`fareSats` is the RIDER'S FLAT PRICE); older requests lack both (the driver app estimates); `suggestedSats` is what the app suggested. `status` ∈ `requested \| in_progress \| closed` (old: `cancelled`) |
 | 30079 | RIDE_OFFER | `e`(request), `p`(rider), `d`, `t` | `{priceSats, mode, rates, mint, tripMiles, tripMinutes, etaMinutes, message, typicalSats, gender, plate}` — the driver's reply. `mode:"flat"`: the rider's flat price (accept) or a higher price (counter); `mode:"metered"`: the driver's standard fare (`priceSats` = their estimate). `rates` = `{base, perMile, perMinute, currency}` (a frozen copy) and `mint` = where the driver is paid; `gender` optional, self-declared; `plate` NIP-44 to the rider. No deposit |
 | 30080 | RIDE_ACCEPT | `e`(offer), `e`(request), `p`(driver), `d`, `t` | `{offerId, requestId, sealed}` — `offerId` names the offer whose rates and mint are FROZEN for the ride; `sealed` = exact trip, NIP-44 to the driver |
 | 30081 | RIDE_FINISH | `e`(request), `p`, `d`="finish-<id>", `t` | `{requestId, reason: rider\|driver\|destination\|unpaid\|silence, role, at, miles?, minutes?, atDestination?}` — by the rider or the assigned driver; ends the ride (NO cancellations, NO fees). `at`/`miles` = the moment and meter the charge runs to |
@@ -180,8 +180,9 @@ test/*.test.mjs
 | 30098 | RIDE_ALIVE (addressable) | `e`(request), `p`(other), `d`="alive-<rideKey>-<role>", `t` | `{role, forRole, at}` — "still riding / still driving": a signed sign of life by the rider or the assigned driver, vouching for `forRole` |
 | 30099 | RIDE_STOP_CHANGE (addressable) | `e`(request), `p`(driver), `d`="stop-<rideKey>-<changeId>", `t` | `{changeId, mode: stop\|destination, sealedDriver, sealedSelf}` — the new place NIP-44 to the driver and the rider; only the ride's rider |
 | 30100 | RIDE_STOP_REPLY (addressable) | `e`(request), `p`(rider), `d`="stop-reply-<changeId>", `t` | `{changeId, accepted}` — only the assigned driver |
+| 30101 | RIDE_OFFER_DECLINE (addressable) | `e`(request), `e`(offer), `p`(driver), `d`="decline-<requestId>-<driver>", `t` | `{requestId, offerId}` — only the ride's rider; turns ONE driver's offer down, the request stays open |
 | 30091 | TRIP_SHARE (addressable) | `d`="share", `t`, `expiration` | `{sealed}` — signed by a throwaway key; payload encrypted with that key (in the link #fragment) |
-| 30090 | PRESENCE (addressable) | `d`="presence", `t`, `expiration` | `{name, npub, vehicle, rates?, lat, lng, ts}` — public, coarsened location |
+| 30090 | PRESENCE (addressable) | `d`="presence", `t`, `expiration` | `{name, npub, vehicle, rates?, hide?, lat, lng, ts}` — public, coarsened location; `hide` = hide tokens of the riders the driver blocked |
 | 21100 | RIDE_LOCATION (ephemeral) | `p`(rider), `expiration` | NIP-44 encrypted `{lat, lng, ts, pm?, tm?}` — exact, to rider only; `pm`/`tm` = the driver's odometer (miles to the pickup / on the trip) |
 | 21101 | RIDE_METER (ephemeral) | `p`(driver), `expiration` | NIP-44 encrypted `{ts, pm?, tm?}` — rider → driver: the distances both screens show (`referenceMiles`); also the driver's live sign that the rider's app is there |
 
@@ -260,6 +261,12 @@ carries `driverPubkey`. Stage is `enroute` (default) → `arrived` → `riding`.
   show sats / wait. Use `formatFiat(x)` (never a literal "$"). The app's own rates and `MIN_OFFER_USD` are dollars (use `usdPrice`).
 - **Blocking** is local (`getSetting("blocked")`, `useApp().blockUser/isBlockedPk`): filter at the data
   boundary (driver `open` list, rider presence and `offersForRide` in ActiveTrip). Don't re-add blocked people anywhere else.
+  It also works the OTHER way (`lib/blocks.js`): requests carry `hide` tokens of blocked drivers (`hideList(me, blocked)`), driver presence carries `hide` tokens of blocked riders;
+  the driver's `open` filter uses `hidesMe(c.hide, r.pubkey, me)` and `subscribePresence(..., { viewerPubkey })` skips a driver who hid from me. `hidesMe` treats anything but an array as "hides nobody".
+- **Unmatched requests**: `rideExpiryMs` (lib/rides.js) = ASAP created+1 h, a reservation pick-up time + `RESERVATION_TTL_MS` (2 h); everyone derives it from the signed request. `RiderContext` closes waiting
+  requests on logout (`onLogout` hook in AppContext, 3 s at most) and says once when one expired. **Declined offers**: kind 30101 (`declineEvent`, `declinedDrivers` in lib/trips.js): only the ride's rider counts;
+  `validOffers`, `pendingOfferFor` and the driver's `open` list skip a declined driver, and the decline holds for later versions of the request.
+- **Driver alerts**: `alerts` (Account) only controls the pop-up card (`OnlineHome` `auto`), the notice and the system notification. The Drive tab badge and the `NearbyRequests` list (`See nearby requests`) work with alerts on or off.
 - **Navigation (rider)**: the bottom `TabBar` is ALWAYS visible in both apps. `RiderContext.plan` has `step` (idle|search|pin|quote) and `from` (where the search page was opened: idle|quote).
   The search page's back arrow goes to `from` (never loop quote ⇄ search); "Cancel" (search), the X (quote, pin), "Cancel and go home" (quote) and a tap on the Ride tab call `resetPlan()` (cancel, home). `PinPicker` returns a place shaped like a search result.
 - **Connection health** (`nostr/relay.js`, `nostr/reachable.js`, `ui/ConnectionBanner.jsx`): the pool is built with `maxWaitForConnection: 15000` (the 3 s default DROPS a slow relay for good). `relayState` tests a relay with a SEPARATE

@@ -2,9 +2,10 @@
 //  ONLINE HOME (driver) — The Drive tab when there is no ride under
 //  way. Map + one bottom sheet that changes with the driver's state:
 //    offline   big GO button
-//    online    "Looking for requests…" + the requests nearby (also as
-//              price tags on the map)
-//    request   an incoming-request card with a countdown: Accept / Decline
+//    online    "Looking for requests…", the count, and "See nearby requests" (a list screen, NearbyRequests);
+//              the requests are also price tags on the map
+//    request   an incoming-request card with a countdown: Accept / Decline. It pops up by itself ONLY when
+//              "New request alerts" is on; with alerts off the driver opens requests from the list or the map.
 //    waiting   "Waiting for <rider> to confirm" after the driver accepted
 //  A rider either accepts each driver's STANDARD fare (the driver's own rates, paid tick by tick) or
 //  names a FLAT price. For a flat price the driver accepts it or counters with a higher one. Either way
@@ -33,24 +34,33 @@ import { MapPage, Sheet, FloatButton } from "../../ui/Layout.jsx";
 import { Spinner } from "../../ui/Parts.jsx";
 import { gpsMessage, canBeOnline, approxNote } from "../../lib/gps.js";
 import RiderInfo, { useRiderInfo } from "../components/RiderInfo.jsx";
+import NearbyRequests from "./NearbyRequests.jsx";
 
 const whenText = (time) => (time === "ASAP" ? "Now" : new Date(time).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" }));
 
 export default function OnlineHome() {
   const { user, rideRequests, btcPrice, usdPrice, prices, setView } = useApp();
-  const { myPosition, online, open, pending, skipped } = useDriver();
+  const { myPosition, online, open, pending, skipped, alerts } = useDriver();
   const [focusId, setFocusId] = useState(null); // request opened by hand (list or map tag)
+  const [listOpen, setListOpen] = useState(false); // the "See nearby requests" screen
+  const [backToList, setBackToList] = useState(false); // the card was opened from the list: return there when it closes
   const [ignored, setIgnored] = useState(null); // offer id the driver stopped waiting on
   const mapRef = useRef(null);
 
   const today = summarizeEarnings(completedDrives(rideRequests, user.publicKey)).today;
 
   const manual = focusId ? open.find((o) => o.request.id === focusId) : null;
-  const auto = online && !manual
+  const auto = online && alerts && !manual
     ? open.find((o) => !skipped.includes(o.request.id) && !isScheduledLater(o.request)) || null
     : null;
   const card = manual || auto;
   const waiting = pending && pending.offer.id !== ignored ? pending : null;
+
+  const openFromList = (id) => { setBackToList(true); setListOpen(false); setFocusId(id); };
+  const openByHand = (id) => { setBackToList(false); setFocusId(id); };
+  const closeCard = () => { setFocusId(null); if (backToList) { setBackToList(false); setListOpen(true); } };
+
+  if (listOpen && online && !waiting) return <NearbyRequests onBack={() => setListOpen(false)} onPick={openFromList} />;
 
   const pills = online ? open.slice(0, 20).map((o) => ({ id: o.request.id, lat: o.content.pickup.lat, lng: o.content.pickup.lng, text: moneyText(shownSats(o.request, user.rates, prices, usdPrice), btcPrice) })) : [];
 
@@ -61,7 +71,7 @@ export default function OnlineHome() {
           ref={mapRef}
           me={myPosition}
           pills={pills}
-          onPill={setFocusId}
+          onPill={openByHand}
           fitKey={`${myPosition ? "pos" : "nopos"}|${online}`}
           padBottom={300}
         />
@@ -84,9 +94,9 @@ export default function OnlineHome() {
       {waiting ? (
         <Waiting key={waiting.offer.id} pending={waiting} onStop={() => setIgnored(waiting.offer.id)} />
       ) : card ? (
-        <Incoming key={card.request.id} item={card} auto={!manual} onClose={() => setFocusId(null)} />
+        <Incoming key={card.request.id} item={card} auto={!manual} onClose={closeCard} />
       ) : online ? (
-        <OnlineSheet onOpen={setFocusId} />
+        <OnlineSheet onSeeAll={() => setListOpen(true)} />
       ) : (
         <OfflineSheet />
       )}
@@ -123,9 +133,8 @@ function OfflineSheet() {
   );
 }
 
-function OnlineSheet({ onOpen }) {
-  const { btcPrice, usdPrice, prices, user } = useApp();
-  const { goOffline, open, geoError, myPosition, gps } = useDriver();
+function OnlineSheet({ onSeeAll }) {
+  const { goOffline, open, geoError, myPosition, gps, alerts } = useDriver();
   return (
     <Sheet label="You're online">
       <div className="flex items-center gap-3">
@@ -139,23 +148,9 @@ function OnlineSheet({ onOpen }) {
         <Button size="sm" variant="secondary" full={false} onClick={goOffline}>Go offline</Button>
       </div>
       {open.length > 0 && (
-        <ul className="mt-3 divide-y divide-neutral-100 border-t border-neutral-100">
-          {open.slice(0, 6).map(({ request, content: c, miles }) => (
-            <li key={request.id}>
-              <button type="button" onClick={() => onOpen(request.id)} className="w-full flex items-center gap-3 py-3 text-left active:bg-neutral-50">
-                <span className="flex-1 min-w-0">
-                  <span className="block font-semibold truncate">{c.dropoff.name}</span>
-                  <span className="block text-sm text-neutral-500 truncate">
-                    From {c.pickup.name}{miles != null ? ` · ${miles.toFixed(1)} mi away` : ""}{c.time && c.time !== "ASAP" ? ` · ${whenText(c.time)}` : ""}
-                  </span>
-                </span>
-                <Money sats={shownSats(request, user.rates, prices, usdPrice)} className="font-bold" />
-                <Icon name="chevron-right" size={18} className="text-neutral-400" />
-              </button>
-            </li>
-          ))}
-        </ul>
+        <Button variant="go" className="mt-4" onClick={onSeeAll}>See nearby requests ({open.length})</Button>
       )}
+      {!alerts && <p className="text-neutral-500 text-xs text-center mt-3">New request alerts are off, so requests do not pop up. Turn them on in Account.</p>}
     </Sheet>
   );
 }

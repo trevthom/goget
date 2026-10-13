@@ -39,7 +39,8 @@ import { getMyMint } from "../../features/ecash/myMint.js";
 import { isDriveReady } from "../../lib/profile.js";
 import { seal } from "../../lib/privacy.js";
 import { PICKUP_CHANGE_NOTE } from "../../lib/pickup.js";
-import { activeDriveFor, pendingOfferFor } from "../../lib/trips.js";
+import { activeDriveFor, pendingOfferFor, declinedDrivers } from "../../lib/trips.js";
+import { hideList, hidesMe } from "../../lib/blocks.js";
 import { isRideExpired, rideEnding, rideKey, rideStatus, rideTimes, rideVersions } from "../../lib/rides.js";
 import { DEFAULT_REQUEST_RADIUS_MILES } from "../../config/settings.js";
 import { getSetting, setSetting } from "../../config/relays.js";
@@ -80,12 +81,14 @@ export function shownSats(request, rates, prices, usdPrice) {
 }
 
 export function DriverProvider({ children }) {
-  const { user, rideRequests, publish, refreshData, pullRecent, pushNotice, liveTick, btcPrice, usdPrice, prices, priceFor, ecash, isBlockedPk } = useApp();
+  const { user, rideRequests, publish, refreshData, pullRecent, pushNotice, liveTick, btcPrice, usdPrice, prices, priceFor, ecash, isBlockedPk, blocked } = useApp();
   const me = user.publicKey;
   const driveReady = isDriveReady(user);
   const { pos: myPosition, error: geoError, status: gps } = useGeolocation(true);
   const posRef = useRef(null);
   const gpsRef = useRef(gps);
+  const blockedRef = useRef(blocked); // the riders I blocked: the public presence carries their hide tokens (lib/blocks.js)
+  blockedRef.current = blocked;
   useEffect(() => { posRef.current = myPosition; }, [myPosition]);
   useEffect(() => { gpsRef.current = gps; }, [gps]);
 
@@ -122,7 +125,7 @@ export function DriverProvider({ children }) {
     const beat = () => {
       const p = posRef.current;
       // Never advertise a stale or very vague position (an approximate one is fine: it is rounded to ~100 m).
-      if (p && canBeOnline(gpsRef.current, p)) publishPresence(user, { lat: p.lat, lng: p.lng, vehicle: carLabel(user.vehicle), rates: normalizeRates(user.rates) || undefined });
+      if (p && canBeOnline(gpsRef.current, p)) publishPresence(user, { lat: p.lat, lng: p.lng, vehicle: carLabel(user.vehicle), rates: normalizeRates(user.rates) || undefined, hide: hideList(user.publicKey, blockedRef.current) });
     };
     beat();
     const id = setInterval(beat, PRESENCE_EVERY_MS);
@@ -161,7 +164,7 @@ export function DriverProvider({ children }) {
       publishRideLocation(user, riderPubkey, { ...myPosition, ...odo.milesRef.current });
     } else if (visible && canBeOnline(gps, myPosition) && now - lastNativeSend.current.presence > 15000) {
       lastNativeSend.current.presence = now;
-      publishPresence(user, { lat: myPosition.lat, lng: myPosition.lng, vehicle: carLabel(user.vehicle), rates: normalizeRates(user.rates) || undefined });
+      publishPresence(user, { lat: myPosition.lat, lng: myPosition.lng, vehicle: carLabel(user.vehicle), rates: normalizeRates(user.rates) || undefined, hide: hideList(user.publicKey, blockedRef.current) });
     }
   }, [myPosition]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -192,7 +195,9 @@ export function DriverProvider({ children }) {
 
   const open = rideRequests
     .filter((r) => r.pubkey !== me && !isBlockedPk(r.pubkey) && rideStatus(r) === "requested")
+    .filter((r) => !hidesMe(parse(r)?.hide, r.pubkey, me)) // the rider blocked me: this request never shows up for me
     .filter((r) => !isRideExpired(parse(r), r.created_at))
+    .filter((r) => !declinedDrivers(r).has(me)) // the rider turned my offer down: it does not come back
     .filter((r) => !declined.includes(r.id))
     .filter((r) => !pending || r.id !== pending.request.id)
     .map((r) => {
@@ -249,8 +254,10 @@ export function DriverProvider({ children }) {
   // The ride I was waiting on went to someone else (or was closed).
   const hadPending = useRef(null);
   useEffect(() => {
-    if (pending) { hadPending.current = pending.request.id; return; }
-    if (hadPending.current && !activeDrive) pushNotice("That ride is no longer available.");
+    if (pending) { hadPending.current = pending.request; return; }
+    if (hadPending.current && !activeDrive) {
+      pushNotice(declinedDrivers(hadPending.current).has(me) ? "The rider chose not to ride with you for that request. It is still open for other drivers." : "That ride is no longer available.");
+    }
     hadPending.current = null;
   }, [pending?.request.id, !!activeDrive]); // eslint-disable-line react-hooks/exhaustive-deps
 

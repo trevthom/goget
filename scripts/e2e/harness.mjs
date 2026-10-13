@@ -47,13 +47,16 @@ export async function boot({ feePpk = 0, driverRates = null } = {}) {
   const browser = await chromium.launch({ args: ["--no-sandbox"] });
   const errors = [];
 
-  // Seed the driver's profile (photo, vehicle, Lightning address) so the app lets them drive.
-  const sk = driver.sk, pk = driver.publicKey;
-  const meta = Ev.buildSignedEvent(K.METADATA, {
-    name: "Dina Driver", about: "NostrRide user", communication: [], picture: JPEG, lud16: "dina@example.com", ...(driverRates ? { rates: driverRates } : {}),
-    vehicle: Priv.sealVehicle({ year: "2020", make: "Toyota", model: "Prius", picture: JPEG, plateState: "KY", plateNumber: "ABC123" }, sk, pk),
-  }, [], sk);
-  relay.inject(meta);
+  // Seed a driver's profile (photo, vehicle, Lightning address) so the app lets them drive. More drivers: seedDriver(h.newKeys(), { name, gender }).
+  const seedDriver = (kp, { name = "Dina Driver", gender, rates = driverRates } = {}) => {
+    const sk = kp.sk, pk = kp.publicKey;
+    relay.inject(Ev.buildSignedEvent(K.METADATA, {
+      name, about: "NostrRide user", communication: [], picture: JPEG, lud16: "dina@example.com", ...(gender ? { gender } : {}), ...(rates ? { rates } : {}),
+      vehicle: Priv.sealVehicle({ year: "2020", make: "Toyota", model: "Prius", picture: JPEG, plateState: "KY", plateNumber: "ABC123" }, sk, pk),
+    }, [], sk));
+    return kp;
+  };
+  seedDriver(driver);
 
   async function newContext(name, pos, extraStorage = {}, accuracy = 10) {
     const ctx = await browser.newContext({ viewport: { width: 420, height: 880 }, geolocation: { latitude: pos.lat, longitude: pos.lng, accuracy }, permissions: ["geolocation"] });
@@ -96,5 +99,5 @@ export async function boot({ feePpk = 0, driverRates = null } = {}) {
     vr.kill(); vd.kill();
     await mint.close(); await relay.close();
   };
-  return { relay, mint, rider, driver, browser, errors, newContext, login, stop, riderUrl: "http://localhost:4173/", driverUrl: "http://localhost:4174/" };
+  return { relay, mint, rider, driver, seedDriver, newKeys: () => Keys.generateKeypair(), browser, errors, newContext, login, stop, riderUrl: "http://localhost:4173/", driverUrl: "http://localhost:4174/" };
 }

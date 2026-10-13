@@ -21,10 +21,10 @@ const SCREENS = { drive: HomeScreen, earnings: EarningsScreen, account: AccountS
 
 function Shell() {
   const { view, setView } = useApp();
-  const { open, online, driveReady } = useDriver();
+  const { open, online, driveReady, alerts } = useDriver();
   const Screen = SCREENS[view] || HomeScreen;
   const tabs = [
-    { id: "drive", label: "Drive", icon: "car", badge: view !== "drive" && online ? open.length : 0 },
+    { id: "drive", label: "Drive", icon: "car", badge: online && (view !== "drive" || !alerts) ? open.length : 0 },
     { id: "earnings", label: "Earnings", icon: "chart" },
     { id: "account", label: "Account", icon: "user", badge: !driveReady ? 1 : 0 },
   ];
