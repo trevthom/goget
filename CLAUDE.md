@@ -27,7 +27,7 @@ Look: white UI, black buttons, bottom sheets over a full-screen map (Inter font)
   `build:rider` / `build:driver` build one. `preview:rider` / `preview:driver` serve a build.
 - `npm test` → Node's built-in test runner over `test/*.test.mjs` (no extra deps):
   trust rules, ride stages, finishing a ride, fares, trips, earnings, privacy, history, LNURL, geocode, publish,
-  event ordering, contact links, GPS quality, payment evidence, blocking, trip sharing, native location, outbox, relay health (`relayhealth`), request expiry / blocking both ways / declined offers (`requests`), flat offers / driver rates + currencies / exact amounts / tips / pickup change / odometer + 5% rule + GPS gap / stage times / relay filter shape / gender order / driver requirements / **ticks (standard + flat), missed payments, final tick, start code, 50 m arrival, silence, waivers, extra stops, frozen rates (`ticks`, `ridepay`, `rideflow`), the ecash wallet (`ecash`) and the real `@cashu/cashu-ts` client against a local test mint (`cashu-adapter`, helpers in `test/helpers/`)**. Run it after touching `lib/*`, `nostr/*`, `features/payments/*`.
+  event ordering, contact links, GPS quality, payment evidence, blocking, trip sharing, native location, outbox, relay health (`relayhealth`), Strike (`strike`), request expiry / blocking both ways / declined offers (`requests`), flat offers / driver rates + currencies / exact amounts / tips / pickup change / odometer + 5% rule + GPS gap / stage times / relay filter shape / gender order / driver requirements / **ticks (standard + flat), missed payments, final tick, start code, 50 m arrival, silence, waivers, extra stops, frozen rates (`ticks`, `ridepay`, `rideflow`), the ecash wallet (`ecash`) and the real `@cashu/cashu-ts` client against a local test mint (`cashu-adapter`, helpers in `test/helpers/`)**. Run it after touching `lib/*`, `nostr/*`, `features/payments/*`.
 - `scripts/e2e/` → optional browser end-to-end run (a rider and a driver, a local relay, the local test mint). Needs `npm i --no-save ws playwright`. Not part of `npm test`.
 - `node scripts/export-apps.mjs [--push] [--only rider|driver] [--out DIR]` → generates the standalone
   `trevthom/nostr-ride-rider` / `nostr-ride-driver` repos (generated mirrors: never edit them; change code here, re-export).
@@ -115,6 +115,8 @@ src/
     stops.js      # extra stop / new destination: stopChanges, stopTrip/fullTrip, hasAcceptedStop, nextStop; STOP_NOTE_*
     currency.js   # CURRENCIES, get/setCurrency, formatFiat, toMinor, satsFromFiat/fiatFromSats (pure maths)
     mints.js      # cleanMintUrl/isMintUrl/mintLabel
+    strike.js     # makeStrike({apiKey}): Strike API client — RIDER pays an invoice (payQuote → execute → waitForPayment), DRIVER gets paid (receiveInvoice in BTC or USD); sats↔BTC strings; StrikeError
+    strikekey.js  # the Strike API key saved ONLY encrypted (NIP-44 to the user's key); strikeSource / strikeReceive choices
     trips.js      # derive current state: activeRideFor, activeDriveFor, offersForRide, rankOffers/offerGender, offerFrom, pendingOfferFor, acceptFor, upcomingRidesFor, isScheduledLater
     odometer.js   # stepOdo/newOdo: miles of a GPS track (skips wobble, bad fixes, glitches) (pure)
     meter.js      # referenceMiles (driver's distance unless the rider's differs >5%), meterView, fmt* (pure)
@@ -132,6 +134,7 @@ src/
     gps.js (gpsStatus/gpsMessage: good|weak|stale; canBeOnline/approxNote) useGeolocation.js (pos, error, status) useWakeLock.js
     geo.js geocode.js (search + reverseGeocode) routing.js (OSRM, cached) image.js lnurl.js locations.js profile.js (driveGaps/gapsText/isDriveReady)
   state/AppContext.jsx            # shared state (above)
+  state/useStrike.js              # the optional Strike link as state: AppContext exposes it as `strike` (connected, client, balances, source, receive, connect, disconnect)
   ui/                             # shared UI kit
     Layout.jsx    # AppFrame, MapPage (+ measures the Sheet so the map pads for it), Sheet (collapsible with `peek`/openKey/closeKey), FloatButton, Screen, TabBar
     MapView.jsx   # Leaflet + OpenStreetMap tiles; pins, OSRM route, cars, "me" dot, price pills, ref.fit(); trip mode (`navigation` + `follow`)
@@ -140,9 +143,9 @@ src/
   features/
     auth/        AuthScreen (role-aware copy) + AuthSteps (unlock, key backup)
     profile/     ProfileParts (useSaveProfile, AccountHeader, ContactMethods, RelaysSection, LogoutButton),
-                 VehicleSection, TypicalFareSection ("Your rates", locked during a ride), CurrencySection, LightningAddressSection, WalletSection, KeysSection
+                 VehicleSection, TypicalFareSection ("Your rates", locked during a ride), CurrencySection, LightningAddressSection, WalletSection, StrikeSection, KeysSection
     ecash/       EcashSection (balance, mint, paste a token, back up, driver cash out), myMint.js
-    payments/    PayDriver (a Lightning address: tips), AddFunds (mint invoice → ecash, NWC or any wallet), rideTicks.js (rider: payDue), redeemTicks.js (driver: redeem + reply),
+    payments/    PayDriver (a Lightning address: tips), AddFunds (mint invoice → ecash, Strike, NWC or any wallet), StrikePay (quote → cost → confirm → pay), CurrencyChoice (Bitcoin | US dollars), rideTicks.js (rider: payDue), redeemTicks.js (driver: redeem + reply),
                  redeemWaivers.js (rider: collect refunds), useRideLink.js (quiet phone, sign of life, 10-minute silence)
   rider/
     App.jsx  state/RiderContext.jsx
@@ -250,6 +253,10 @@ carries `driverPubkey`. Stage is `enroute` (default) → `arrived` → `riding`.
   Proofs are saved encrypted (NIP-44 to the user's own key, in pieces). Rules: one money move at a time (`_exclusive`); a token being sent sits in `pending` until its event is
   published/queued (`settle`) or is returned (`unreserve`/`recoverPending`); a token is redeemed once (fingerprint); the sender adds the mint's input fee (`includeFees`) so the receiver
   gets the full tick; `EcashError.definitive` separates a mint's "no" from an unreachable mint. Never log proofs or tokens. Test against `test/helpers/localmint.mjs` (real maths).
+- **Strike** (optional; `lib/strike.js`, `lib/strikekey.js`, `state/useStrike.js`; docs/index.md "Strike"): the RIDER's Strike pays a Lightning invoice the app made itself (the mint's, or the driver's lud16) from the Bitcoin or the US dollar balance
+  (`StrikePay`: quote → show the cost → ONLY then `execute` → `waitForPayment`); the DRIVER's cash out into Strike makes the invoice IN the currency the driver chose (`receiveInvoice`: BTC must match to the sat, USD within 5% of the market price, whole cents).
+  The API key is saved ONLY encrypted (`strikekey.js`), never in the clear and never logged; `strike.client` exposes calls, not the key. Drivers never see "Pay with Strike", riders never see "Cash out to Strike". A failed or lost payment says
+  "look in Strike first" (no double pay). Written from Strike's public reference and tested against `test/helpers/localstrike.mjs`; NOT yet run against live Strike (CORS unknown: `VITE_STRIKE_API_URL` can point at a proxy).
 - **Tips** still go over Lightning: the rider's `lud16` payment via `PayDriver` and a RIDE_PAYMENT `tip` record. **Evidence**: tips are re-checked by the driver app
   (`verifyPayment`: only a `verify` URL on the host of the driver's own lud16 is fetched); the tick trail (30095/30096/30097/30098) is the evidence for the ride's money.
 - **Finish ride (lib/finish.js)**: one `finishRide` action per app (rider: RiderContext, driver: DriverContext), always behind a `ConfirmDialog`. Before the `riding` marker nothing is

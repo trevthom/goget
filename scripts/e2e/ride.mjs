@@ -3,7 +3,10 @@ import { pinPickup } from "./flow.mjs";
 import { tmpdir } from "node:os";
 const SC = tmpdir(); // failure screenshots go here
 const FLAT = process.env.FLAT === "1";
+const STRIKE_TIP = process.env.STRIKE_TIP === "1"; // after the ride the rider links Strike and tips the driver from it
 const h = await boot({ feePpk: 100 });
+let strike = null;
+if (STRIKE_TIP) strike = await (await import("../../test/helpers/localstrike.mjs")).startLocalStrike({ usdPerBtc: 100000 });
 let D, R, dctx, rctx;
 const t0 = Date.now();
 const log = (...a) => console.log(`[${String(Math.round((Date.now() - t0) / 1000)).padStart(3)}s]`, ...a);
@@ -25,6 +28,14 @@ try {
   const dStart = metersNorth(PICKUP, 800);
   ({ ctx: dctx, page: D } = await h.newContext("driver", dStart));
   ({ ctx: rctx, page: R } = await h.newContext("rider", PICKUP));
+  if (STRIKE_TIP) {
+    // api.strike.me goes to the stand-in Strike; the driver's Lightning address (dina@example.com) answers with an invoice for the tip.
+    const { invoiceFor } = await import("../../test/helpers/localmint.mjs");
+    await rctx.route(/api\.strike\.me/, async (r) => { const u = new URL(r.request().url()); await r.fulfill({ response: await r.fetch({ url: strike.url + u.pathname + u.search }) }); });
+    const cors = { "access-control-allow-origin": "*" };
+    await rctx.route(/example\.com\/\.well-known\/lnurlp\//, (r) => r.fulfill({ headers: cors, json: { tag: "payRequest", callback: "https://example.com/lnurl-cb", minSendable: 1000, maxSendable: 100000000000, commentAllowed: 0 } }));
+    await rctx.route(/example\.com\/lnurl-cb/, (r) => r.fulfill({ headers: cors, json: { pr: invoiceFor(Number(new URL(r.request().url()).searchParams.get("amount")) / 1000, "tipinvoice") } }));
+  }
 
   await step("driver logs in and goes online", async () => {
     await h.login(D, h.driver, h.driverUrl);
@@ -160,6 +171,24 @@ try {
     log("     rider receipt:", text);
   });
 
+  if (STRIKE_TIP) await step("rider links Strike and tips the driver from it (cost shown first)", async () => {
+    await R.getByRole("button", { name: "Account" }).click();
+    await R.getByLabel("Strike API key").fill(strike.apiKey);
+    await R.getByRole("button", { name: "Connect Strike" }).click();
+    await R.getByText(/Strike is connected/).waitFor({ timeout: 15000 });
+    await R.locator('nav[aria-label="Main"]').getByRole("button", { name: "Ride" }).click();
+    await R.getByRole("button", { name: /Leave a tip/ }).click({ timeout: 20000 });
+    await R.getByRole("button", { name: "$2", exact: true }).click();
+    await R.getByRole("button", { name: /with Strike/ }).click();
+    await R.getByText(/Strike takes about/).waitFor({ timeout: 15000 });
+    if (strike.stats.payments.length) throw new Error("a quote must not send money");
+    await R.getByRole("button", { name: "Confirm and pay" }).click();
+    await R.getByText(/Tip sent/).first().waitFor({ timeout: 25000 });
+    const p = strike.stats.payments;
+    if (p.length !== 1 || p[0].sats !== 2000 || p[0].source !== "BTC") throw new Error("Strike should have paid one 2,000 sat tip from Bitcoin: " + JSON.stringify(p));
+    log("     Strike paid:", JSON.stringify(p[0]));
+  });
+
   await step("driver sees the summary; payments add up", async () => {
     await D.getByText("Ride finished").waitFor({ timeout: 30000 });
     await sleep(6000);
@@ -182,6 +211,7 @@ try {
 } catch (e) {
   log("RUN FAILED");
 } finally {
+  if (strike) await strike.close();
   await h.stop();
 }
 process.exit(ok ? 0 : 1);

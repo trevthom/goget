@@ -198,7 +198,39 @@ only what the ride has earned so far, and most of it is already paid.
   event carrying it is published or queued; after a crash it returns to the wallet if the mint still calls it unspent. One money move runs at a time. A token cannot be
   redeemed twice. The user can back up the wallet as tokens (*Back up my ecash*). Logging out keeps the ecash on the device; without the nsec it cannot be opened.
 - The mint charges a fee for spending proofs (`input_fee_ppk`). The **sender** adds it on top of each tick, so the driver gets the full tick.
-- The Lightning wallet (NWC) is used to **add funds** and for **tips**. Tips are still paid over Lightning to the driver's Lightning address.
+- The Lightning wallet (NWC) is used to **add funds** and for **tips**. Tips are still paid over Lightning to the driver's Lightning address. A linked **Strike** account
+  can do the same for a rider, and receive a driver's cash out, in Bitcoin or US dollars (next section).
+
+### Strike (optional): pay from it, cash out into it
+[Strike](https://strike.me) is a bitcoin and dollar account with an API. Each person may link their own account in *Account → Strike* by pasting an **API key**
+(Strike dashboard → Developers). Nothing changes for people who do not.
+
+| | Rider (Strike is the **sender**) | Driver (Strike is the **receiver**) |
+|---|---|---|
+| Used for | *Add funds* (and a *tip*): **Pay with Strike** | *Cash out*: **Cash out to Strike** |
+| The person chooses | which balance pays: **Bitcoin** or **US dollars** | what Strike keeps it as: **Bitcoin** or **US dollars** |
+| Key permissions | `partner.payment-quote.lightning.create`, `partner.payment-quote.execute`, `partner.payment.read`, `partner.balances.read` | `partner.invoice.create`, `partner.invoice.quote.generate`, and (optional) `partner.balances.read` |
+
+- **Rider.** The app makes the mint's funding invoice as always. It then asks Strike for a **quote** (`POST /v1/payment-quotes/lightning`, with the paying currency). The panel
+  shows what Strike will take ("about $5.03 from your US dollar balance, including a network fee of 1 sat") and **nothing is sent until the rider taps *Confirm and pay***
+  (`PATCH …/execute`, then the app waits for the payment to finish). A quote is tied to one balance, so choosing the other balance asks again; an old quote is asked again, not used.
+  Paying from dollars makes Strike buy the bitcoin at its own rate, so the dollar price carries Strike's spread. The mint then collects the ecash as usual.
+- **Driver.** A cash out asks Strike for an invoice **in the currency the driver chose** (`POST /v1/invoices`, then `…/quote`), and the mint pays it.
+  *Bitcoin*: the invoice is for exactly the sats paid, and the app refuses one that differs by a single sat. *US dollars*: the invoice is for whole cents, Strike credits those
+  dollars, and the sats the mint pays follow Strike's rate at that moment; the app refuses an invoice more than 5% away from the market price it knows. A dialog shows an estimate
+  first; afterwards the screen says what Strike received. The driver can switch currency in *Account → Strike* or just above the cash-out button.
+- **Who chooses what.** The rider chooses only what *they* spend. The driver alone chooses what they keep; the rider never sees it, and the ride is priced in sats whichever it is.
+  A **tip** goes to the driver's Lightning address, which carries no currency, so what a tip arrives as follows the settings of the driver's own Strike account. Only a cash out
+  from the app can be steered.
+- **The key.** It is kept in memory and saved on the device **only encrypted** to the person's own Nostr key (NIP-44, `src/lib/strikekey.js`); *Disconnect* erases it and logging in
+  again restores it. Give it only the permissions above (it can move money); delete it in Strike to cancel it everywhere. A refused call says which permission is missing.
+  Calls go straight from the browser to `https://api.strike.me`; set `VITE_STRIKE_API_URL` to `https://api.next.strike.me` for Strike's sandbox, or to a proxy.
+- **Failures are loud and safe.** The invoice Strike pays is always one the app made itself (the mint's, or the driver's Lightning address). Each quote carries its own idempotency key.
+  If a payment fails or its answer is lost, the message says to look in the Strike app before trying again, so nobody pays twice. A refused or mismatched invoice costs nothing:
+  the ecash is still in the wallet.
+- **Not yet verified against live Strike.** The client follows Strike's public API reference and is tested against a stand-in server (`test/helpers/localstrike.mjs`) with the real Cashu
+  client and the local mint, and in a headless browser (`scripts/e2e/strike.mjs`). It has **not** been run against Strike itself or its sandbox. Two things to check first: that a
+  browser may call the Strike API directly (CORS), and the exact field names of a payment's state. Strike's answers are read tolerantly.
 
 ### What is built and what is not
 - Built and tested: ticks, flat and standard fares, missed-payment counting, the final tick, Finish ride with confirmation, the start code, the 50 m arrival rule, the
@@ -443,6 +475,7 @@ A web page cannot read the location with the screen off. `native/` wraps the **d
 | Tick rules: grace time for a missed payment (30 s), missed-payment limit (2) | `src/lib/ticks.js` |
 | Silence rules (10 minutes), arrival distance (50 m), start-code lock | `src/lib/finish.js`, `src/lib/arrival.js`, `src/lib/startcode.js` |
 | The ecash mint a new driver starts with | `VITE_DEFAULT_MINT` in `.env` (default in `src/config/services.js`) |
+| The Strike API (sandbox or a proxy) | `VITE_STRIKE_API_URL` in `.env` (default `https://api.strike.me`) |
 | Supported currencies | `src/lib/currency.js` |
 | Relays | `src/config/relays.js` (also editable in the app) |
 | Map tiles, address search, routing | `.env` (see `env.example`); defaults in `src/config/services.js` |
@@ -453,14 +486,16 @@ A web page cannot read the location with the screen off. `native/` wraps the **d
 `npm test` runs `test/*.test.mjs` with Node's built-in runner: trust rules, ride stages, finishing a ride (who may finish, earliest finish wins, the silence cut-off), fares, trips,
 earnings, privacy, history, Lightning invoices, geocoding, publishing and the outbox, event ordering, contact links, GPS, payment evidence, blocking, trip sharing, native location, tips,
 pickup changes, the odometer (and the GPS-gap rule) and the 5% distance rule, stage times, relay subscription calls, flat offers and counters, driver rates and currencies, exact amounts, gender
-ordering, driver requirements, expiry of unmatched requests, blocking both ways, declined offers (`requests`), **the tick schedule (standard and flat), missed payments, the final tick, the start code, the 50 m arrival rule, silence and sign-of-life
+ordering, driver requirements, expiry of unmatched requests, blocking both ways, declined offers (`requests`), Strike (amounts, errors, a rider paying the mint invoice from Bitcoin and from dollars,
+a driver cashing out as Bitcoin and as dollars, the key saved encrypted: `strike`), **the tick schedule (standard and flat), missed payments, the final tick, the start code, the 50 m arrival rule, silence and sign-of-life
 rules, waivers, extra stops and frozen rates, the ecash wallet (funding, paying, redeeming, crash recovery, cash out, encrypted saving), a whole ride's money between a rider and a
 driver, and the real `@cashu/cashu-ts` client against a local test mint that does the real blind-signature maths**.
 
 The apps were also run end to end in a headless browser (a rider and a driver playing a whole ride through a local relay and the local test mint): funding with an invoice, the request,
 the offer, the confirm screen, the 50 m arrival lock, both start codes, the base, minute and mile ticks, Finish ride with its confirmation, the receipt and summary, missed
 payments, a refill after the ride, and a waiver with a refund. That harness is in `scripts/e2e/` (it needs `npm i --no-save ws playwright`; it is not part of `npm test`).
-**Never run against a public mint, and never on a real phone.**
+`scripts/e2e/strike.mjs` plays the Strike flows (link the key, pay from dollars and from Bitcoin, cash out as dollars and as Bitcoin) against the stand-in Strike server.
+**Never run against a public mint or live Strike, and never on a real phone.**
 
 ## Deploying
 `npm run build` makes `dist/rider` and `dist/driver`. Put each on any static host (for example
@@ -524,10 +559,13 @@ To switch, copy `env.example` to `.env`, set `VITE_TILE_URL` (and `VITE_PHOTON_U
 - Both apps count minutes from the driver's signed start time with their own clock. A phone clock that is a minute wrong makes ticks late or early; the 30-second grace and the catch-up payment absorb small gaps, not large ones. Phones normally set their clock by network time.
 - The ecash code (about 70 KB compressed) is a separate file that loads at login. The service worker keeps it after the first online visit, so ecash works offline only after one online login.
 - Free public map, geocoder and router services need replacing before launch, and a mint you trust must be chosen (`VITE_DEFAULT_MINT`).
+- Strike is optional and unverified against the live service (see *Strike*): a browser may be refused by Strike's servers (CORS), in which case `VITE_STRIKE_API_URL` must point at a proxy.
+  Only Bitcoin and US dollars are offered (Strike also holds other currencies). A rider cannot choose what a driver receives.
 - Not built from the earlier draft (it no longer applies, because there are no cancellations or fees): waiting and no-show charges, charges for the drive to the pickup, driver-set waiting terms,
   and a cancel rate on profiles.
 
 ## Changelog
+- **Strike (optional)** — a rider links a Strike account (API key, saved encrypted) and *Add funds* / tips can be paid from it, from the Bitcoin or the US dollar balance, after the cost is shown and confirmed. A driver links Strike and a cash out goes into it as Bitcoin (exact sats) or US dollars (Strike converts); the driver chooses. New: `lib/strike.js`, `lib/strikekey.js`, `state/useStrike.js`, `features/profile/StrikeSection.jsx`, `features/payments/StrikePay.jsx` and `CurrencyChoice.jsx`; tests `strike` and `scripts/e2e/strike.mjs`. Not yet run against live Strike.
 - **Reservations expire, blocking both ways, nearby list, gender, "No thanks"** — a reservation nobody takes closes 2 hours after its pick-up time (was 1), and logging out closes every request still waiting for a driver. Blocking hides people from each other on the map (hide tokens in requests and presence). *New request alerts* off now really stops the pop-up; the Drive tab keeps its count bubble and a new *See nearby requests* list shows pickup, dropoff, fare, time to the rider, trip distance, trip time and notes. The rider sees the driver's gender (if given) before choosing, and *No thanks* turns one driver down without closing the request (new kind 30101). Presence and trip-share relay pools wait 15 s for a connection.
 - **Pickup is never automatic; cancel buttons; stale relay warning fixed; version line** — the pickup is no longer filled in from GPS. The search page asks for an address or a business name, always shows *Set pickup on the map*, and keeps *Your location* as a deliberate tap. *Cancel* (search), *Cancel and go home* (quote), and an X (quote, pin) return to the home screen; the pin page has the X too. The tab bar was checked on every rider screen with real styling. The "No relay accepted your request" warning no longer sticks after a retry succeeds: it shows only while the request still waits in the outbox after 15 s. A relay has 15 s to answer a publish, and the outbox banner needs a 20 s wait. Account shows the app version (build time and commit), so a person can tell which build a phone runs.
 - **Rider navigation, pickup pin, approximate driver location, relay banner, no license photo** — the rider can pin the pickup on the map (drag the map under a fixed pin; the address is looked up). The back arrow on *Plan your ride* goes one screen back (it used to loop between the quote and the search page); an X on the search, pin and quote pages, and the *Ride* tab, cancel the planning and show the home screen. The bottom tab bar is always visible in both apps. A driver can go online and be shown on the map with an approximate location (accurate to 25 km or better); marking *I've arrived* still needs a good fix. The false "can't reach any relay" message is fixed: the relay test no longer uses (and breaks) the app's own connection, the pool waits 15 s for a connection, the banner needs a sustained outage that a separate test confirms, and sockets are renewed after a sleep or a network change. The driver's license photo is gone: no upload, no requirement, no event kind 30092.

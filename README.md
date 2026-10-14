@@ -93,7 +93,8 @@ so use one you trust. Full rules: `docs/index.md`, section *Pay as you ride*.
 **Wallets:** *Account → Ecash wallet* holds the ecash you ride with. *Account → Lightning Wallet*: paste a **real**
 Nostr Wallet Connect string (`nostr+walletconnect://...`) from a wallet that supports NWC (Alby Hub, Coinos…) to add funds
 and tip in one tap. The app reads your real balance from that wallet and never shows made-up numbers. Without one you can
-still pay any invoice from another wallet.
+still pay any invoice from another wallet. *Account → Strike* (optional): a rider links a Strike account to add funds and tip from
+its Bitcoin or US dollar balance; a driver links one to cash out into it as Bitcoin or as US dollars. Details: `docs/index.md`, *Strike*.
 
 ---
 
