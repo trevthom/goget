@@ -14,6 +14,7 @@ import { rideEnding, rideStatus } from "../../lib/rides.js";
 import { exactTrip } from "../../lib/privacy.js";
 import { currentLedger, ledgerSummary } from "../../lib/ridemoney.js";
 import { rideTerms, rideMint } from "../../lib/terms.js";
+import { rideRail } from "../../lib/strikerail.js";
 import { FINISH_REASONS } from "../../lib/finish.js";
 import { waiversOf } from "../../lib/payments.js";
 import Money, { moneyText } from "../../ui/Money.jsx";
@@ -73,9 +74,9 @@ export default function DriveSummary({ request }) {
           {tipped > 0 && <div className="flex justify-between"><dt className="font-semibold text-[#05683a]">Tip</dt><dd><Money sats={tipped} className="font-bold" /></dd></div>}
         </dl>
         {sum.outstanding > 2 && (
-          <p className="text-neutral-600 text-sm mt-2">The rider can still refill their wallet and pay what is missed. It arrives in your ecash wallet by itself. {driveMoney?.missed ? `${driveMoney.missed} payments were missed during the ride.` : ""}</p>
+          <p className="text-neutral-600 text-sm mt-2">The rider can still refill their wallet and pay what is missed. It arrives {rideRail(request) === "strike" ? "in your Strike account" : "in your ecash wallet"} by itself. {driveMoney?.missed ? `${driveMoney.missed} payments were missed during the ride.` : ""}</p>
         )}
-        <p className="text-neutral-500 text-xs mt-2">Payments arrived in your ecash wallet as the ride ran. Cash out to your Lightning address in Account.</p>
+        <p className="text-neutral-500 text-xs mt-2">{rideRail(request) === "strike" ? "Payments arrived in your Strike account as the ride ran." : "Payments arrived in your ecash wallet as the ride ran. Cash out to your Lightning address in Account."}</p>
         {(waived.forgiven > 0 || waived.refund > 0) && <p className="text-neutral-600 text-sm mt-2">You waived {moneyText(waived.forgiven + waived.refund, btcPrice)}{waived.refund > 0 ? `, and sent ${moneyText(waived.refund, btcPrice)} back to the rider` : ""}.</p>}
         {(sum.outstanding > 2 || sum.paid > 0) && (
           <button type="button" onClick={() => setWaiving(true)} className="mt-3 text-sm font-semibold underline">Waive part of the fare</button>
@@ -118,7 +119,8 @@ export default function DriveSummary({ request }) {
 function Waive({ request, sum, onClose, onWaive }) {
   const { btcPrice, pushNotice, ecash } = useApp();
   // Money goes back from the driver's own ecash at the ride's mint, so no more can be refunded than they still hold there.
-  const held = ecash ? ecash.balance(rideMint(request) || "") : 0;
+  // (A ride paid straight into Strike has no ecash to send back: only the unpaid part can be waived.)
+  const held = ecash && rideRail(request) !== "strike" ? ecash.balance(rideMint(request) || "") : 0;
   const max = sum.outstanding + Math.min(sum.paid, held);
   const [sats, setSats] = useState(null);
   const [reason, setReason] = useState("");

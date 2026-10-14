@@ -41,11 +41,12 @@ export const SCOPES = {
   payment: "partner.payment.read",
   invoice: "partner.invoice.create",
   invoiceQuote: "partner.invoice.quote.generate",
+  invoiceRead: "partner.invoice.read",
 };
 
 // Permissions to give a key, by what the person wants to do.
 export const RIDER_SCOPES = [SCOPES.quote, SCOPES.execute, SCOPES.payment, SCOPES.balances];
-export const DRIVER_SCOPES = [SCOPES.invoice, SCOPES.invoiceQuote, SCOPES.balances];
+export const DRIVER_SCOPES = [SCOPES.invoice, SCOPES.invoiceQuote, SCOPES.invoiceRead, SCOPES.balances];
 
 export const NETWORK_MESSAGE =
   "Could not reach Strike. Check your connection. If you are online, Strike may not allow calls from a web page: ask the person who runs this app to set VITE_STRIKE_API_URL to a proxy.";
@@ -94,6 +95,17 @@ const sleepMs = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // How far the sats of a dollar invoice may differ from the sats asked for before the app refuses it (a wrong rate somewhere).
 export const USD_TOLERANCE = 0.05;
+
+// The smallest step of a dollar invoice (one cent) in sats at this price, and how far a dollar invoice for a ride payment may be from the
+// tick it pays: the cent steps and two prices a moment apart (2%). Both apps use it: the rider refuses to pay more, the driver credits the whole tick.
+export const centSats = (usdPerBtc) => (usdPerBtc > 0 ? Math.ceil(1e8 / (usdPerBtc * 100)) : 0);
+export const tickSlack = (tickSats, usdPerBtc) => Math.max(Math.ceil(tickSats * 0.02), 2 * centSats(usdPerBtc));
+// May a rider's app pay an invoice of `invoiceSats` for a tick of `tickSats`? Bitcoin invoices may not ask for more than the tick.
+export function invoiceFits({ tickSats, invoiceSats, currency, usdPerBtc }) {
+  if (!Number.isFinite(invoiceSats) || invoiceSats < 1 || !(tickSats >= 1)) return false;
+  if (currency !== "USD") return invoiceSats <= tickSats;
+  return usdPerBtc > 0 && invoiceSats <= tickSats + tickSlack(tickSats, usdPerBtc);
+}
 
 export function makeStrike({ apiKey, baseUrl = STRIKE_API_URL, fetchImpl, newId = uuid, sleep = sleepMs } = {}) {
   const base = String(baseUrl).replace(/\/+$/, "");
@@ -184,10 +196,16 @@ export function makeStrike({ apiKey, baseUrl = STRIKE_API_URL, fetchImpl, newId 
       return "pending";
     },
 
+    // An invoice of ours: "UNPAID" | "PENDING" | "PAID" | "CANCELLED" (as Strike words it).
+    async invoiceState(invoiceId) {
+      const d = await call("GET", `/v1/invoices/${encodeURIComponent(invoiceId)}`, { need: SCOPES.invoiceRead });
+      return String(d?.state || "").toUpperCase();
+    },
+
     // ── DRIVER: get paid by a Lightning invoice ──
     // An invoice made in `currency` for about `sats`. BTC: exactly `sats`. USD: `usdPerBtc` (the market price) gives the
     // dollar amount in whole cents, and Strike turns it into an invoice whose sats follow its own rate.
-    // Returns { bolt11, sats, receive: { currency, amount }, invoiceId }.
+    // Returns { bolt11, sats, receive: { currency, amount }, invoiceId, expiresInSec }.
     async receiveInvoice({ sats, currency, usdPerBtc, description = "NostrRide cash out" }) {
       let amount;
       if (currency === "BTC") amount = { currency: "BTC", amount: satsToBtc(sats) };
@@ -207,7 +225,7 @@ export function makeStrike({ apiKey, baseUrl = STRIKE_API_URL, fetchImpl, newId 
       const got = msat / 1000;
       const off = currency === "BTC" ? got !== sats : Math.abs(got - sats) / sats > USD_TOLERANCE;
       if (off) throw new StrikeError("amount", `Strike made an invoice for ${got.toLocaleString()} sats, not about ${sats.toLocaleString()}. Nothing was sent.`);
-      return { bolt11, sats: got, receive: amount, invoiceId: String(inv.invoiceId) };
+      return { bolt11, sats: got, receive: amount, invoiceId: String(inv.invoiceId), expiresInSec: Number(q.expirationInSec) > 0 ? Number(q.expirationInSec) : 3600 };
     },
   };
 }

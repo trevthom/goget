@@ -35,6 +35,8 @@ import { paidSats, waiverEvent } from "../../lib/payments.js";
 import { waiverSplit } from "../../lib/finish.js";
 import { stopReplyEvent, STOP_NOTE_FLAT } from "../../lib/stops.js";
 import { redeemAllFor } from "../../features/payments/redeemTicks.js";
+import { serveAllStrike } from "../../features/payments/strikeServe.js";
+import { rideRail } from "../../lib/strikerail.js";
 import { getMyMint } from "../../features/ecash/myMint.js";
 import { isDriveReady } from "../../lib/profile.js";
 import { seal } from "../../lib/privacy.js";
@@ -81,7 +83,7 @@ export function shownSats(request, rates, prices, usdPrice) {
 }
 
 export function DriverProvider({ children }) {
-  const { user, rideRequests, publish, refreshData, pullRecent, pushNotice, liveTick, btcPrice, usdPrice, prices, priceFor, ecash, isBlockedPk, blocked } = useApp();
+  const { user, rideRequests, publish, refreshData, pullRecent, pushNotice, liveTick, btcPrice, usdPrice, prices, priceFor, ecash, strike, isBlockedPk, blocked } = useApp();
   const me = user.publicKey;
   const driveReady = isDriveReady(user);
   const { pos: myPosition, error: geoError, status: gps } = useGeolocation(true);
@@ -270,7 +272,7 @@ export function DriverProvider({ children }) {
   milesNow.current = tripMiles;
   // The timer below reads the latest values through this ref, so it does not restart on every relay event.
   const latest = useRef({});
-  latest.current = { rideRequests, activeDrive, user, publish, priceFor, pushNotice };
+  latest.current = { rideRequests, activeDrive, user, publish, priceFor, pushNotice, strike, usdPrice };
   const [driveMoney, setDriveMoney] = useState(null);
   const warned = useRef("");
   const activeKey = activeDrive ? rideKey(activeDrive) : null;
@@ -282,8 +284,9 @@ export function DriverProvider({ children }) {
       if (running) return;
       running = true;
       try {
-        const { rideRequests: reqs, activeDrive: drive, user: u, publish: pub, priceFor: price, pushNotice: notify } = latest.current;
+        const { rideRequests: reqs, activeDrive: drive, user: u, publish: pub, priceFor: price, pushNotice: notify, strike: st, usdPrice: usd } = latest.current;
         await redeemAllFor({ user: u, ecash, publish: pub, rideRequests: reqs });
+        await serveAllStrike({ user: u, strike: st, publish: pub, usdPrice: usd, rideRequests: reqs }); // rides paid straight into Strike
         if (!alive || !drive) return;
         const terms = rideTerms(drive);
         const ledger = terms && rideTimes(drive).startedAt
@@ -303,16 +306,17 @@ export function DriverProvider({ children }) {
     tick();
     const id = setInterval(tick, 3000);
     return () => { alive = false; clearInterval(id); };
-  }, [ecash]);
+  }, [ecash, strike.connected]);
   // A new tick or reply is worth a look at once, not in 3 s: run the loop's work when relay events arrive for this driver.
   useEffect(() => {
     if (!ecash) return;
     return relay.onEvent((_id, ev) => {
       if (ev.kind !== EVENT_KINDS.RIDE_TICK) return;
-      const { rideRequests: reqs, user: u, publish: pub } = latest.current;
+      const { rideRequests: reqs, user: u, publish: pub, strike: st, usdPrice: usd } = latest.current;
       redeemAllFor({ user: u, ecash, publish: pub, rideRequests: reqs }).catch(() => {});
+      serveAllStrike({ user: u, strike: st, publish: pub, usdPrice: usd, rideRequests: reqs }).catch(() => {});
     });
-  }, [ecash]);
+  }, [ecash, strike.connected]);
 
   // ── Actions ──
   // "I'll take it": offer to drive. The offer carries this driver's rates and mint (copied: they are frozen
@@ -337,6 +341,8 @@ export function DriverProvider({ children }) {
           mode: flat ? "flat" : "metered", // metered = this driver's standard fare, paid tick by tick; flat = the agreed price
           rates, // a copy of this driver's rates, frozen once the rider chooses this offer
           mint, // the ecash mint this driver is paid at
+          // Paid straight into this driver's Strike account (no mint), in the currency they chose: only if Strike is linked and allowed.
+          ...(strike.connected && strike.direct && { strike: { currency: strike.receive } }),
           tripMiles: tripMi,
           tripMinutes: c.durationMin ?? driveMinutes(tripMi),
           etaMinutes: miles == null ? 5 : pickupEta(miles),
@@ -361,7 +367,7 @@ export function DriverProvider({ children }) {
       refreshData();
       return sent;
     },
-    [publish, refreshData, myPosition, user, prices, usdPrice, pushNotice]
+    [publish, refreshData, myPosition, user, prices, usdPrice, pushNotice, strike.connected, strike.direct, strike.receive]
   );
 
   const mark = useCallback(
@@ -450,6 +456,10 @@ export function DriverProvider({ children }) {
       let refund = split.refund;
       if (!forgiven && !refund) return false;
       let token = "", pay = null;
+      if (refund > 0 && rideRail(request) === "strike") {
+        pushNotice("This ride was paid from Strike, so money cannot be sent back from the app. You can forgive what the rider has not paid.");
+        return false;
+      }
       if (refund > 0) {
         const mint = rideMint(request);
         if (!ecash || !mint) { pushNotice("Your ecash wallet is not ready, so the money cannot be sent back yet."); return false; }

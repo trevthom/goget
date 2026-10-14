@@ -7,6 +7,7 @@
 //  Also the two choices that go with it (plain settings, no secret):
 //    strikeSource   which balance pays a rider's bill: "BTC" | "USD"
 //    strikeReceive  what Strike keeps a driver's cash out as: "BTC" | "USD"
+//    strikeDirect   rides are paid straight from / into Strike (no ecash mint), when both people allow it (default on)
 // ════════════════════════════════════════════════════════════
 
 import { nip44 } from "nostr-tools";
@@ -35,3 +36,5 @@ export const getStrikeSource = () => { const v = getSetting("strikeSource", "BTC
 export const setStrikeSource = (v) => { if (CURRENCY.has(v)) setSetting("strikeSource", v); };
 export const getStrikeReceive = () => { const v = getSetting("strikeReceive", "BTC"); return CURRENCY.has(v) ? v : "BTC"; };
 export const setStrikeReceive = (v) => { if (CURRENCY.has(v)) setSetting("strikeReceive", v); };
+export const getStrikeDirect = () => getSetting("strikeDirect", true) !== false;
+export const setStrikeDirect = (on) => setSetting("strikeDirect", !!on);

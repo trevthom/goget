@@ -4,6 +4,7 @@
 //    strike.client            makeStrike(...) for the key, or null (components call its methods; none gives the key back)
 //    strike.balances          { BTC, USD } as last read, or null (unknown / the key may not read balances)
 //    strike.source / .receive "BTC" | "USD": the rider's paying balance / the driver's receiving currency
+//    strike.direct            rides are paid straight from / into Strike with no ecash mint (when both people allow it)
 //    strike.connect(key) → throws StrikeError if Strike refuses the key;  strike.disconnect();  strike.refresh()
 //  The key is restored from its encrypted copy when the user logs in (lib/strikekey.js) and dropped from memory at logout.
 // ════════════════════════════════════════════════════════════
@@ -12,13 +13,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { makeStrike, StrikeError } from "../lib/strike.js";
 import {
   cleanStrikeKey, looksLikeKey, saveStrikeKey, loadStrikeKey, eraseStrikeKey,
-  getStrikeSource, setStrikeSource, getStrikeReceive, setStrikeReceive,
+  getStrikeSource, setStrikeSource, getStrikeReceive, setStrikeReceive, getStrikeDirect, setStrikeDirect,
 } from "../lib/strikekey.js";
 
 export default function useStrike(user) {
   const [state, setState] = useState({ connected: false, balances: null });
   const [source, setSource] = useState(getStrikeSource);
   const [receive, setReceive] = useState(getStrikeReceive);
+  const [direct, setDirect] = useState(getStrikeDirect);
   const client = useRef(null);
   const pk = user?.publicKey;
 
@@ -66,10 +68,11 @@ export default function useStrike(user) {
 
   const pickSource = useCallback((v) => { setStrikeSource(v); setSource(getStrikeSource()); }, []);
   const pickReceive = useCallback((v) => { setStrikeReceive(v); setReceive(getStrikeReceive()); }, []);
+  const pickDirect = useCallback((on) => { setStrikeDirect(on); setDirect(getStrikeDirect()); }, []);
 
   return useMemo(() => ({
     connected: state.connected, balances: state.balances, client: client.current,
     sandbox: !!client.current?.sandbox,
-    source, receive, setSource: pickSource, setReceive: pickReceive, connect, disconnect, refresh,
-  }), [state, source, receive, pickSource, pickReceive, connect, disconnect, refresh]);
+    source, receive, direct, setSource: pickSource, setReceive: pickReceive, setDirect: pickDirect, connect, disconnect, refresh,
+  }), [state, source, receive, direct, pickSource, pickReceive, pickDirect, connect, disconnect, refresh]);
 }
