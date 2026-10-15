@@ -3,6 +3,7 @@ import { pinPickup } from "./flow.mjs";
 import { tmpdir } from "node:os";
 const SC = tmpdir(); // failure screenshots go here
 const FLAT = process.env.FLAT === "1";
+const SHARE_CHECK = process.env.SHARE_CHECK === "1"; // the rider shares the trip; the shared position must be the RIDER's phone, every ~6 s
 const h = await boot({ feePpk: 100 });
 let D, R, dctx, rctx;
 const t0 = Date.now();
@@ -77,6 +78,42 @@ try {
     await R.getByText("Confirm your driver").first().waitFor();
     log("     needed to start:", (await R.getByText("Needed to start").locator("..").innerText()).replace(/\s+/g, " "));
     await R.getByRole("button", { name: "Confirm driver" }).click({ timeout: 15000 });
+  });
+
+  if (SHARE_CHECK) await step("shared trip: the position is the rider's own phone (not the car's), sent every ~6 s", async () => {
+    const Sh = await import("../../src/nostr/share.js");
+    await openSheet(R);
+    await R.getByRole("button", { name: /Safety/ }).first().click({ timeout: 15000 });
+    await R.getByRole("button", { name: "Start sharing" }).click();
+    const text = await R.locator("p.font-mono").first().innerText({ timeout: 10000 });
+    const token = Sh.parseShareHash(new URL(text.trim()).hash)?.token;
+    if (!token) throw new Error("no share link on the Safety sheet: " + text);
+    const seen = []; // [{ id, at (ms when we saw it), p (the decrypted payload) }]
+    const t1 = Date.now() + 26000;
+    while (Date.now() < t1) {
+      const ev = h.relay.events.filter((e) => e.kind === 30091).sort((a, b) => b.created_at - a.created_at)[0];
+      if (ev && !seen.some((x) => x.id === ev.id)) { const p = Sh.openShare(token, JSON.parse(ev.content).sealed); if (p) seen.push({ id: ev.id, at: Date.now(), p }); }
+      await sleep(250);
+    }
+    log("     updates seen:", seen.length, "gaps (s):", seen.slice(1).map((x, i) => ((x.at - seen[i].at) / 1000).toFixed(1)).join(" "));
+    const last = seen.at(-1)?.p;
+    if (!last) throw new Error("no shared update reached the relay");
+    if (last.who !== "rider") throw new Error("the update should say whose position it is: " + JSON.stringify(last));
+    if (Math.abs(last.lat - PICKUP.lat) > 0.0005 || Math.abs(last.lng - PICKUP.lng) > 0.0005) throw new Error(`the shared position is not the rider's phone (${last.lat}, ${last.lng}); the rider is at ${PICKUP.lat}, ${PICKUP.lng}`);
+    if (!last.carPos || Math.abs(last.carPos.lat - metersNorth(PICKUP, 800).lat) > 0.002) throw new Error("the car should still be shown, 800 m away: " + JSON.stringify(last.carPos));
+    if (Math.abs(last.lat - last.carPos.lat) < 0.003) throw new Error("rider and car positions are the same: the test cannot tell them apart");
+    if (seen.length < 3) throw new Error("expected an update about every 6 s, saw " + seen.length);
+    const gaps = seen.slice(1).map((x, i) => x.at - seen[i].at);
+    if (Math.min(...gaps) < 4000) throw new Error("updates came faster than the 6 s pace: " + gaps.join(","));
+    if (Math.max(...gaps) > 9000) throw new Error("an update was late (more than 9 s): " + gaps.join(","));
+    // A friend opens the link: the page shows the rider, says so, and draws a blue dot.
+    const { page: F } = await h.newContext("friend", PICKUP);
+    await F.goto(new URL("track.html", h.riderUrl).href + new URL(text.trim()).hash);
+    await F.getByText(/is on a trip/).waitFor({ timeout: 20000 });
+    await F.getByText(/The blue dot is .*own phone/).waitFor({ timeout: 10000 });
+    if (!(await F.locator(".nr-me, .leaflet-marker-icon").count())) throw new Error("the friend's map has no marker");
+    if (process.env.E2E_SHOTS) { await sleep(600); await F.screenshot({ path: `${process.env.E2E_SHOTS}/friend-view.png` }); }
+    await R.getByRole("button", { name: "Close" }).click();
   });
 
   await step("driver: Arrived is locked until within 50 m", async () => {
@@ -168,7 +205,7 @@ try {
     // A few seconds after the finish both screens must show the same fare and the same paid amount.
     const later = (await R.locator("dl").first().innerText()).replace(/\s+/g, " ");
     log("     rider receipt, later:", later);
-    const sats = (t) => [...t.matchAll(/([\d,]+) sats/g)].map((m) => m[1]);
+    const sats = (t) => [...t.replace(/\$\d[\d,]*\.\d\d\s*/g, "").matchAll(/([\d,]+) sats/g)].map((m) => m[1]); // drop the "$3.64" in front of "3,635 sats" (styling puts a space or none between them)
     if (sats(text).slice(0, 2).join() !== sats(later).slice(0, 2).join()) throw new Error(`rider and driver disagree: ${sats(later)} vs ${sats(text)}`);
     await D.getByRole("button", { name: "Back to driving" }).click();
     await D.getByRole("button", { name: "Account" }).click();

@@ -42,7 +42,7 @@ import { PICKUP_CHANGE_NOTE } from "../../lib/pickup.js";
 import { activeDriveFor, pendingOfferFor, declinedDrivers } from "../../lib/trips.js";
 import { hideList, hidesMe } from "../../lib/blocks.js";
 import { isRideExpired, rideEnding, rideKey, rideStatus, rideTimes, rideVersions } from "../../lib/rides.js";
-import { DEFAULT_REQUEST_RADIUS_MILES } from "../../config/settings.js";
+import { DEFAULT_REQUEST_RADIUS_MILES, LOCATION_PING_MS } from "../../config/settings.js";
 import { getSetting, setSetting } from "../../config/relays.js";
 import { moneyText } from "../../ui/Money.jsx";
 
@@ -51,7 +51,7 @@ export const useDriver = () => useContext(DriverContext);
 
 const HOUR = 3600000;
 const PRESENCE_EVERY_MS = 15000;
-const LOCATION_EVERY_MS = 6000;
+const LOCATION_EVERY_MS = LOCATION_PING_MS; // the rider's shared-trip pings run at the same pace (config/settings.js)
 const parse = (e) => { try { return JSON.parse(e.content); } catch { return null; } };
 const carLabel = (v) => (v ? [v.year, v.make, v.model].filter(Boolean).join(" ") : "");
 
