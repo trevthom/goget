@@ -7,6 +7,7 @@
 //     "Restore ecash" bring the balance back; a wrong phrase is refused with a reason
 //   • the lost phone's own coins were swapped during the restore (the mint calls them spent)
 // Takes about a minute. The pages are styled like the real app (Tailwind is built into the app CSS).
+import http from "node:http";
 import { boot, sleep, PICKUP } from "./harness.mjs";
 import { tap, makeLog, openFold } from "./flow.mjs";
 
@@ -73,6 +74,24 @@ try {
     await R.getByText(/Your ecash is not protected yet/).waitFor({ timeout: 5000 });
     if (!(await header(R, "Recovery phrase").innerText()).includes("Not written down")) throw new Error("the Recovery phrase section should say it is not written down");
     await snap(R, "recovery-warning");
+  });
+
+  await step("a mint address that is a website, not a mint, is refused with a short reason (and not saved)", async () => {
+    const page = '<!DOCTYPE html><html lang="en"><head><title>404: This page could not be found.</title></head><body><h1>404</h1>' + "x".repeat(3000) + "</body></html>";
+    const site = http.createServer((req, res) => { res.writeHead(404, { "content-type": "text/html", "access-control-allow-origin": "*" }); res.end(page); });
+    await new Promise((r) => site.listen(0, "127.0.0.1", r));
+    try {
+      const box = R.getByLabel("Ecash mint address");
+      await box.fill(`http://127.0.0.1:${site.address().port}`);
+      await tap(box.locator("..").getByRole("button", { name: "Save" }));
+      const note = R.getByText(/is not a Cashu mint/);
+      await note.waitFor({ timeout: 15000 });
+      const text = await note.innerText();
+      if (/<|html/i.test(text) || text.length > 200) throw new Error("the message is not short and plain: " + text.slice(0, 120));
+      const saved = await R.evaluate(() => JSON.parse(localStorage.getItem("nostrride_ecashMint")));
+      if (saved !== h.mint.url) throw new Error("the bad address was saved: " + saved);
+      await box.fill(h.mint.url);
+    } finally { await new Promise((r) => site.close(r)); }
   });
 
   await step("the 12 words are shown; a wrong word is refused; the right words finish it", async () => {
