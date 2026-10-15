@@ -6,7 +6,7 @@
 //   • the phone is "lost": a fresh browser (no saved data) logs in with the same key, the wallet is empty, the 12 words typed into
 //     "Restore ecash" bring the balance back; a wrong phrase is refused with a reason
 //   • the lost phone's own coins were swapped during the restore (the mint calls them spent)
-// Takes about a minute. With E2E_TAILWIND set (see README.md) the pages are styled like the real app.
+// Takes about a minute. The pages are styled like the real app (Tailwind is built into the app CSS).
 import { boot, sleep, PICKUP } from "./harness.mjs";
 import { tap, makeLog, openFold } from "./flow.mjs";
 
@@ -148,6 +148,7 @@ try {
     await R.getByText(/Could not swap the ecash/).waitFor({ timeout: 30000 });
   });
 
+  for (const [n, p, role] of [["R2", R2, "rider"]]) { const u = await h.missingStyles(p, role); log("class names on screen with no CSS rule (R2):", u.length ? u.join(" ") : "none"); }
   log("errors:", h.errors.length ? h.errors : "none");
   ok = !h.errors.length;
 } catch { log("RUN FAILED"); } finally { await h.stop(); }

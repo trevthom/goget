@@ -1,7 +1,9 @@
 // Shared set-up for the browser end-to-end runs (see README.md in this folder): a local relay, a local Cashu mint that does the
 // real maths, the two production builds served by `vite preview`, and a headless browser with two contexts (rider, driver)
-// whose outside services (geocoder, router, price feed, map tiles) are mocked. Tailwind's CDN is not reachable in a sandbox,
-// so pages may look unstyled; the runs use the page text and roles, not the looks.
+// whose outside services (geocoder, router, price feed, map tiles) are mocked. The pages are styled exactly as a person sees
+// them: Tailwind is built into the app's own CSS file. Every class name that appears on screen during a run is collected, and
+// h.missingStyles(page, role) lists the ones the built CSS has no rule for (a class name built from pieces is not found by
+// Tailwind's scan, and would be unstyled).
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import { createRequire } from "node:module";
@@ -74,9 +76,15 @@ export async function boot({ feePpk = 0, driverRates = null } = {}) {
       for (let i = 1; i < pts.length; i++) m += Math.hypot((pts[i][0] - pts[i - 1][0]) * 88000, (pts[i][1] - pts[i - 1][1]) * 111000) * 1.3;
       r.fulfill({ json: { routes: [{ geometry: { type: "LineString", coordinates: pts }, distance: m, duration: m / 11 }] } });
     });
-    // Optional: real styling. Tailwind's CDN script is unreachable in a sandbox; E2E_TAILWIND names a script that adds the CSS
-    // (see scripts/e2e/README.md), so the pages look as they do for a user and screenshots mean something.
-    if (process.env.E2E_TAILWIND) await ctx.route(/cdn\.tailwindcss\.com/, (r) => r.fulfill({ body: fs.readFileSync(process.env.E2E_TAILWIND, "utf8"), contentType: "application/javascript" }));
+    // Remember every class name that is ever on screen (for h.missingStyles).
+    await ctx.addInitScript(() => {
+      const seen = (window.__seenClasses = new Set());
+      const take = (el) => { const c = el.getAttribute && el.getAttribute("class"); if (c) for (const t of c.split(/\s+/)) if (t) seen.add(t); };
+      const scan = (root) => { take(root); if (root.querySelectorAll) root.querySelectorAll("[class]").forEach(take); };
+      new MutationObserver((ms) => { for (const m of ms) { if (m.type === "attributes") take(m.target); for (const n of m.addedNodes) if (n.nodeType === 1) scan(n); } })
+        .observe(document, { attributes: true, attributeFilter: ["class"], childList: true, subtree: true });
+      document.addEventListener("DOMContentLoaded", () => scan(document.documentElement));
+    });
     await ctx.route(/api\.coingecko\.com/, (r) => r.fulfill({ json: { bitcoin: { usd: 100000, eur: 90000, gbp: 80000, jpy: 15000000 } } }));
     await ctx.route(/tile\.openstreetmap\.org|unpkg|fonts\.g/, (r) => r.request().url().includes("tile.openstreetmap") ? r.fulfill({ body: PNG, contentType: "image/png" }) : r.abort());
     const page = await ctx.newPage();
@@ -99,5 +107,13 @@ export async function boot({ feePpk = 0, driverRates = null } = {}) {
     vr.kill(); vd.kill();
     await mint.close(); await relay.close();
   };
-  return { relay, mint, rider, driver, seedDriver, newKeys: () => Keys.generateKeypair(), browser, errors, newContext, login, stop, riderUrl: "http://localhost:4173/", driverUrl: "http://localhost:4174/" };
+  // Class names seen on `page` that the built CSS of `role` has no rule for (marker classes such as "group" have none and are expected).
+  const missingStyles = async (page, role = "rider") => {
+    const dir = `${REPO}/dist/${role}/assets`;
+    const css = fs.readdirSync(dir).filter((f) => f.endsWith(".css")).map((f) => fs.readFileSync(`${dir}/${f}`, "utf8")).join("\n");
+    const esc = (t) => t.replace(/[^a-zA-Z0-9_-]/g, (c) => "\\" + c);
+    const tokens = await page.evaluate(() => [...(window.__seenClasses || [])]);
+    return tokens.filter((t) => !css.includes("." + esc(t)) && !/^(group|peer|nr-up)$/.test(t)).sort();
+  };
+  return { relay, mint, rider, driver, seedDriver, missingStyles, newKeys: () => Keys.generateKeypair(), browser, errors, newContext, login, stop, riderUrl: "http://localhost:4173/", driverUrl: "http://localhost:4174/" };
 }

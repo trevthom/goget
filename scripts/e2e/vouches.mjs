@@ -5,7 +5,7 @@
 //   • the rider first sees no badge on the offers; an nsec typed into the field is refused; the rider adds Fran's npub
 //     → Dina's offer shows the badge (Sam's does not); a tap on the badge names Fran; Remove takes the badge away at once
 //   • the rider's own list reaches the relay as a kind 30102 event; there are no stars and no review box anywhere
-// Takes about a minute. With E2E_TAILWIND set (see README.md) the pages are styled like the real app.
+// Takes about a minute. The pages are styled like the real app (Tailwind is built into the app CSS).
 import { boot, sleep, PICKUP, metersNorth } from "./harness.mjs";
 import { tap, makeLog, pinPickup, openFold } from "./flow.mjs";
 
@@ -155,6 +155,8 @@ try {
     if (!d?.tags.some((t) => t[0] === "p" && t[1] === fran.publicKey)) throw new Error("Dina's list lacks Fran");
   });
 
+  for (const [n, p, role] of [["R", R, "rider"]]) { const u = await h.missingStyles(p, role); log("class names on screen with no CSS rule (R):", u.length ? u.join(" ") : "none"); }
+  for (const [n, p, role] of [["D", D, "driver"]]) { const u = await h.missingStyles(p, role); log("class names on screen with no CSS rule (D):", u.length ? u.join(" ") : "none"); }
   log("errors:", h.errors.length ? h.errors : "none");
   ok = !h.errors.length;
 } catch { log("RUN FAILED"); } finally { await h.stop(); }

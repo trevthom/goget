@@ -2,6 +2,9 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { fileURLToPath } from "node:url";
 import { execSync } from "node:child_process";
+import tailwindcss from "tailwindcss";
+import autoprefixer from "autoprefixer";
+import { cspPlugin } from "./csp.mjs";
 
 // "2026-10-12 21:30 UTC · 9dbe842": the build time, and the commit when git is available (a host without git shows only the time).
 const buildId = () => {
@@ -21,7 +24,9 @@ export default defineConfig(({ mode }) => {
   return {
     root: `apps/${role}`,
     envDir: fileURLToPath(new URL(".", import.meta.url)), // .env lives at the repo root
-    plugins: [react()],
+    plugins: [react(), cspPlugin()],
+    // Tailwind CSS v3 is built into the app's own CSS (src/tailwind.css); no script from a CDN runs in the page.
+    css: { postcss: { plugins: [tailwindcss(fileURLToPath(new URL("./tailwind.config.js", import.meta.url))), autoprefixer()] } },
     define: { __APP_ROLE__: JSON.stringify(role), __BUILD_ID__: JSON.stringify(buildId()) },
     server: {
       port: role === "driver" ? 5174 : 5173,

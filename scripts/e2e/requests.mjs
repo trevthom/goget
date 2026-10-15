@@ -5,7 +5,7 @@
 //   D4  alerts on            → normal
 // Then: D1 offers, the rider sees "Female driver", says "No thanks", the request stays open, D4 offers and the rider can
 // turn D4 down on the confirm screen too. Last: the rider logs out and the open request closes for the drivers.
-// Takes about two minutes. Works best with E2E_TAILWIND (see README.md).
+// Takes about two minutes.
 import { boot, sleep, PICKUP, metersNorth } from "./harness.mjs";
 import { tap, makeLog, pinPickup, openFold } from "./flow.mjs";
 
@@ -154,6 +154,8 @@ try {
     if (!closed) throw new Error("no closing events reached the relay when the rider logged out");
   });
 
+  for (const [n, p, role] of [["R", R, "rider"]]) { const u = await h.missingStyles(p, role); log("class names on screen with no CSS rule (R):", u.length ? u.join(" ") : "none"); }
+  for (const [n, p, role] of [["P1", P1, "driver"]]) { const u = await h.missingStyles(p, role); log("class names on screen with no CSS rule (P1):", u.length ? u.join(" ") : "none"); }
   log("errors:", h.errors.length ? h.errors : "none");
   ok = !h.errors.length;
 } catch { log("RUN FAILED"); } finally { await h.stop(); }

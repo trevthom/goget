@@ -38,7 +38,7 @@ Then open **two browser windows** side by side:
 
 To stop: `Ctrl + C`. To run only one app: `npm run dev:rider` or `npm run dev:driver`.
 
-> **Needs internet** for styling (Tailwind loads from a CDN), fonts, the map, and the relays.
+> **Needs internet** for fonts, the map, and the relays.
 > No API keys or accounts required. While you run `npm run dev`, the driver app also
 > shows a couple of fake demo requests (never in a production build).
 
@@ -135,7 +135,7 @@ Every part of the Account screen opens and closes when you tap its title.
 | The ecash mint a new driver starts with | `VITE_DEFAULT_MINT` in `.env` (see `env.example`) |
 | Currencies, tick and finish rules | `src/lib/currency.js`, `src/lib/ticks.js`, `src/lib/finish.js` |
 | Default relay list | `src/config/relays.js` |
-| Colors | `src/theme.js` (and Tailwind classes in the screens) |
+| Colors | `src/theme.js` (and Tailwind classes in the screens; Tailwind is built into the app's CSS, `tailwind.config.js`) |
 | What a button looks like (everywhere) | `src/ui/Button.jsx` |
 | The bottom sheet, tab bar, page layout | `src/ui/Layout.jsx` |
 | The map (tiles, pins, cars) | `src/ui/MapView.jsx` |

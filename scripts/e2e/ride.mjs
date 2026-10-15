@@ -215,6 +215,8 @@ try {
     log("     driver wallet:", w.slice(0, 100));
   });
 
+  for (const [n, p, role] of [["R", R, "rider"]]) { const u = await h.missingStyles(p, role); log("class names on screen with no CSS rule (R):", u.length ? u.join(" ") : "none"); }
+  for (const [n, p, role] of [["D", D, "driver"]]) { const u = await h.missingStyles(p, role); log("class names on screen with no CSS rule (D):", u.length ? u.join(" ") : "none"); }
   log("errors:", h.errors.length ? h.errors : "none");
   ok = !h.errors.length;
 } catch (e) {

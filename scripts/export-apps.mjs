@@ -58,9 +58,9 @@ This repo is the **${role}** app: ${DESC[role]}
 The sibling repo is **nostr-ride-${other}**. Both speak the same events (table below).
 
 ${GENERATED(role)}
-Stack: **React 18 + Vite**. **Tailwind is loaded from a CDN** in \`index.html\`
-(NOT a build dependency — do not add \`@tailwindcss/vite\` or \`tailwindcss\`
-to package.json; its native binary breaks on some machines, which is why it was removed).
+Stack: **React 18 + Vite**. **Tailwind CSS v3 is built into the app's own CSS** (\`src/tailwind.css\` + \`tailwind.config.js\`,
+through PostCSS in \`vite.config.js\`): no script from another site runs in the page (the app holds keys and money). Use **v3 only**:
+Tailwind v4 and \`@tailwindcss/vite\` have a native binary that breaks on some machines. The built pages carry a Content-Security-Policy (\`csp.mjs\`).
 Full human-readable docs: \`docs/index.md\`.
 Look: white UI, black buttons, bottom sheets over a full-screen map (Inter font).
 
@@ -115,7 +115,7 @@ npm run dev     # http://localhost:${port}
 npm test        # automated checks
 npm run build   # static site in dist/
 \`\`\`
-Needs Node.js (LTS) and internet (Tailwind CDN, fonts, map, relays). Location needs \`https://\` or \`localhost\`.
+Needs Node.js (LTS) and internet (fonts, map, relays). Location needs \`https://\` or \`localhost\`.
 To try a whole ride, run both apps and sign in with a different account in each.
 
 ## Try it on an iPhone (no Apple Developer Program)
@@ -127,6 +127,23 @@ Deploy \`dist/\` to any free https host, open it in Safari, then Share → **Add
 - [\`CLAUDE.md\`](CLAUDE.md): file map and every invariant.
 - \`env.example\`: use your own map, search and routing servers.
 ${role === "driver" ? "- `native/`: Capacitor shell for background GPS (untested on a device).\n" : ""}`;
+}
+
+// The exported project has index.html (and track.html) at its root, so the scan paths differ from the main repo's.
+function tailwindConfig() {
+  return `// Tailwind CSS v3, built into the app's own CSS (see vite.config.js). \`content\` lists every file whose class names get CSS:
+// write each class out in full ("bg-" + color is not found). Do NOT use Tailwind v4 or @tailwindcss/vite (native binary).
+import { dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const root = dirname(fileURLToPath(import.meta.url));
+
+export default {
+  content: [\`\${root}/*.html\`, \`\${root}/src/**/*.{js,jsx}\`],
+  theme: { extend: {} },
+  plugins: [],
+};
+`;
 }
 
 function viteConfig(role, port) {
@@ -144,6 +161,9 @@ function viteConfig(role, port) {
   return `import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { fileURLToPath } from "node:url";
+import tailwindcss from "tailwindcss";
+import autoprefixer from "autoprefixer";
+import { cspPlugin } from "./csp.mjs";
 
 // "2026-10-12 21:30 UTC": the build time (shown in Account, so a person can tell which version is running).
 const buildId = () => new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC";
@@ -153,7 +173,9 @@ const buildId = () => new Date().toISOString().slice(0, 16).replace("T", " ") + 
 // files work from any folder or sub-path (GitHub Pages, Netlify, a plain server).
 export default defineConfig({
   base: "./",
-  plugins: [react()],
+  plugins: [react(), cspPlugin()],
+  // Tailwind CSS v3 is built into the app's own CSS (src/tailwind.css); no script from a CDN runs in the page.
+  css: { postcss: { plugins: [tailwindcss(fileURLToPath(new URL("./tailwind.config.js", import.meta.url))), autoprefixer()] } },
   define: { __APP_ROLE__: JSON.stringify("${role}"), __BUILD_ID__: JSON.stringify(buildId()) },
   server: { port: ${port} },
   preview: { port: ${port - 1000} },
@@ -193,6 +215,8 @@ function exportOne(role) {
   write(path.join(d, "package-lock.json"), JSON.stringify(lock, null, 2) + "\n");
 
   write(path.join(d, "vite.config.js"), viteConfig(role, port));
+  fs.copyFileSync(path.join(SRC, "csp.mjs"), path.join(d, "csp.mjs"));
+  write(path.join(d, "tailwind.config.js"), tailwindConfig());
   write(path.join(d, "CLAUDE.md"), claudeMd(role, other, port));
   write(path.join(d, "docs", "index.md"), docsMd(role, other, port));
   write(path.join(d, "README.md"), readme(role, other, port));

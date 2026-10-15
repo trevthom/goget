@@ -5,7 +5,7 @@
 //   • the pickup can be pinned (drag the map under the pin) or typed (a business name)
 //   • the DROP-OFF can be pinned on the map too ("Set drop-off on the map"); with both places set the quote opens
 //   • a driver whose phone gives only an APPROXIMATE location (accuracy 3 km) can go online and be seen by the rider
-// Takes about a minute. With E2E_TAILWIND set (see README.md) the pages are styled like the real app.
+// Takes about a minute. The pages are styled like the real app (Tailwind is built into the app CSS).
 import { boot, sleep, PICKUP } from "./harness.mjs";
 import { tap, makeLog, pinPickup } from "./flow.mjs";
 
@@ -160,11 +160,9 @@ try {
   });
 
   await step("dragging the map moves the pin and looks up the new address", async () => {
-    // No Tailwind (its CDN is blocked here): give the pin page just enough layout for a real map.
     await tap(R.getByRole("button", { name: "Close request" }));
     await tap(R.getByRole("button", { name: "Close request" }).last()); // the confirmation
     await home(R).waitFor({ timeout: 15000 });
-    if (!process.env.E2E_TAILWIND) await R.addStyleTag({ content: '.h-\\[100dvh\\]{height:100dvh}.flex{display:flex}.flex-col{flex-direction:column}.flex-1{flex:1 1 0%}.min-h-0{min-height:0}.relative{position:relative}.absolute{position:absolute}.inset-0{top:0;left:0;right:0;bottom:0}.inset-x-0{left:0;right:0}.bottom-0{bottom:0}' });
     const lookups = [];
     R.on("request", (r) => { const u = r.url(); if (/photon\.komoot\.io\/reverse/.test(u)) lookups.push(new URL(u).searchParams.get("lat")); });
     await openSearch();
@@ -183,6 +181,8 @@ try {
     log("     lookups:", lookups.join(", "));
   });
 
+  const unstyled = await h.missingStyles(R, "rider");
+  log("class names on screen with no CSS rule:", unstyled.length ? unstyled.join(" ") : "none");
   log("errors:", h.errors.length ? h.errors : "none");
   ok = !h.errors.length;
 } catch { log("RUN FAILED"); } finally { await h.stop(); }

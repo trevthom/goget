@@ -23,15 +23,9 @@ when every step passed and the pages raised no errors. `ride.mjs` and `missed.mj
 
 What they do **not** prove: behaviour against a public mint, a real Lightning wallet, a real phone's GPS, or Tailwind's styling.
 
-## Real styling (optional)
-The app loads Tailwind from a CDN, which a sandbox cannot reach, so the pages are unstyled and a layout problem
-(for example a bar hidden behind a sheet) cannot be seen. To see the real look, build the CSS once and point the runs at it:
-```bash
-mkdir /tmp/tw && cd /tmp/tw && npm init -y && npm i tailwindcss@3
-printf '@tailwind base;\n@tailwind components;\n@tailwind utilities;\n' > in.css
-echo 'module.exports = { content: ["/path/to/nostr-ride/src/**/*.{js,jsx}"] }' > tailwind.config.js
-npx tailwindcss -c tailwind.config.js -i in.css -o out.css
-node -e "const css=require('fs').readFileSync('out.css','utf8'); require('fs').writeFileSync('shim.js','(function(){var s=document.createElement(\"style\");s.textContent='+JSON.stringify(css)+';document.head.appendChild(s);})();')"
-E2E_NOBUILD=1 E2E_TAILWIND=/tmp/tw/shim.js node scripts/e2e/nav.mjs
-```
-The harness answers the CDN request with that script. `page.screenshot()` then shows the screen as a person sees it.
+## Styling
+The pages are styled exactly as a person sees them: Tailwind is built into the app's own CSS (`src/tailwind.css`, `tailwind.config.js`), so no
+script from another site is needed and nothing has to be mocked. `E2E_SHOTS=/some/dir node scripts/e2e/<script>.mjs` saves screenshots of the new screens.
+The harness also remembers every class name that was on screen; `nav.mjs` prints the ones the built CSS has no rule for
+(`h.missingStyles(page, role)`). A class name built from pieces (`"bg-" + color`) is not found by Tailwind's scan and would show up there.
+The built pages carry a Content-Security-Policy (`csp.mjs`): a script from another site cannot run, so a policy violation shows as a console error and fails the run.
