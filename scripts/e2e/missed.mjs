@@ -1,7 +1,7 @@
 // A rider whose wallet runs dry: two missed payments, the driver finishes, the rider refills and pays the rest,
 // the driver waives part of the fare and the money goes back. Takes about 6 minutes (the clock is real).
 import { boot, sleep, PICKUP, metersNorth } from "./harness.mjs";
-import { pinPickup } from "./flow.mjs";
+import { pinPickup, openFold } from "./flow.mjs";
 import { tmpdir } from "node:os";
 const SC = tmpdir(); // failure screenshots go here
 const h = await boot({ feePpk: 100, driverRates: { base: 0.5, perMile: 0.5, perMinute: 5, currency: "USD" } });
@@ -34,6 +34,7 @@ try {
     await D.getByText("You're online").waitFor({ timeout: 15000 });
     await h.login(R, h.rider, h.riderUrl);
     await R.getByRole("button", { name: "Account" }).click({ timeout: 40000 });
+    await openFold(R, "Ecash wallet");
     await R.getByRole("button", { name: /Add funds/ }).first().click();
     await R.getByLabel("Amount to add").fill("11");
     await R.getByRole("button", { name: "Show invoice" }).click();
@@ -130,6 +131,7 @@ try {
     await sleep(4000);
     await R.getByRole("button", { name: "Done" }).last().click();
     await R.locator('nav[aria-label="Main"]').getByText("Account", { exact: true }).click();
+    await openFold(R, "Ecash wallet");
     const bal = (await R.getByText("Balance").first().locator("..").innerText()).replace(/\s+/g, " ");
     log("     rider wallet now:", bal.slice(0, 90));
   });

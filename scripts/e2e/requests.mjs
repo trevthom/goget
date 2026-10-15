@@ -7,7 +7,7 @@
 // turn D4 down on the confirm screen too. Last: the rider logs out and the open request closes for the drivers.
 // Takes about two minutes. Works best with E2E_TAILWIND (see README.md).
 import { boot, sleep, PICKUP, metersNorth } from "./harness.mjs";
-import { tap, makeLog, pinPickup } from "./flow.mjs";
+import { tap, makeLog, pinPickup, openFold } from "./flow.mjs";
 
 const h = await boot();
 const log = makeLog();
@@ -45,6 +45,7 @@ try {
   await step("four drivers go online; D1 turns the new-request alerts off in Account", async () => {
     await Promise.all([online(P1, d1), online(P2, d2), online(P3, d3), online(P4, d4)]);
     await tap(tabs(P1).getByText("Account", { exact: true }));
+    await openFold(P1, "Driving");
     const sw = P1.getByRole("switch", { name: "New request alerts" });
     await sw.waitFor({ timeout: 10000 });
     if ((await sw.getAttribute("aria-checked")) !== "true") throw new Error("alerts should start on");

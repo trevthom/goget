@@ -7,7 +7,7 @@
 //   • the rider's own list reaches the relay as a kind 30102 event; there are no stars and no review box anywhere
 // Takes about a minute. With E2E_TAILWIND set (see README.md) the pages are styled like the real app.
 import { boot, sleep, PICKUP, metersNorth } from "./harness.mjs";
-import { tap, makeLog, pinPickup } from "./flow.mjs";
+import { tap, makeLog, pinPickup, openFold } from "./flow.mjs";
 
 const REPO = new URL("../..", import.meta.url).pathname.replace(/\/$/, "");
 const V = await import(`${REPO}/src/lib/vouches.js`);
@@ -41,7 +41,7 @@ const step = async (name, fn) => {
 };
 const snap = async (p, name) => { if (process.env.E2E_SHOTS) { await sleep(600); await p.screenshot({ path: `${process.env.E2E_SHOTS}/${name}.png` }); } };
 const tabs = (p) => p.locator('nav[aria-label="Main"]');
-const goAccount = async (p) => { await tap(tabs(p).getByText("Account", { exact: true })); await p.getByLabel("npub of a person you know and trust").waitFor({ timeout: 10000 }); };
+const goAccount = async (p) => { await tap(tabs(p).getByText("Account", { exact: true })); await openFold(p, "Your vouches"); await p.getByLabel("npub of a person you know and trust").waitFor({ timeout: 10000 }); };
 const addVouch = async (p, who) => {
   await p.getByLabel("npub of a person you know and trust").fill(Keys.fullNpub(who.publicKey));
   await tap(addButton(p));

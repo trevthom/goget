@@ -95,6 +95,10 @@ Nostr Wallet Connect string (`nostr+walletconnect://...`) from a wallet that sup
 and tip in one tap. The app reads your real balance from that wallet and never shows made-up numbers. Without one you can
 still pay any invoice from another wallet.
 
+**Lost phone?** Your ecash is saved on the device. *Account → Recovery phrase* shows 12 words to write on paper (and asks you to type
+three back). With them, a new phone finds your ecash again at the mint (*Restore ecash from 12 words*). Keep the paper secret: whoever has the words can take the ecash.
+Every part of the Account screen opens and closes when you tap its title.
+
 ---
 
 ## 3b. Safety, blocking and disputes

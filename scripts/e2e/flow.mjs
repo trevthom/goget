@@ -7,6 +7,12 @@ export const num = (s) => Number(String(s).replace(/[^0-9]/g, "")) || 0;
 export const tap = (loc) => loc.dispatchEvent("click");
 export const openSheet = async (p) => { const b = p.getByRole("button", { name: /drag up to open/ }); if (await b.count()) await b.first().click(); await sleep(400); };
 export const satsIn = async (loc) => num(await loc.first().locator(":scope").getByText(/^[\d,]+ sats$/).first().innerText().catch(() => "0"));
+// The Account screen's sections are folds (closed until tapped): open one by its title.
+export const openFold = async (p, title) => {
+  const b = p.locator("section h2 button", { hasText: title }).first();
+  await b.waitFor({ timeout: 15000 });
+  if ((await b.getAttribute("aria-expanded")) !== "true") await b.click();
+};
 export const geo = (c, p) => c.setGeolocation({ latitude: p.lat, longitude: p.lng, accuracy: 10 });
 
 // The pickup is never filled in by the app: pin it on the map (the pin starts at the phone's position).
@@ -38,6 +44,7 @@ export async function rideToRiding(h, opts = {}) {
     await D.getByText("You're online").waitFor({ timeout: 15000 });
     await h.login(R, h.rider, h.riderUrl);
     await R.getByRole("button", { name: "Account" }).click({ timeout: 40000 });
+    await openFold(R, "Ecash wallet");
     await R.getByRole("button", { name: /Add funds/ }).first().click();
     if (opts.fundAmount) await R.getByLabel("Amount to add").fill(opts.fundAmount);
     await R.getByRole("button", { name: "Show invoice" }).click();

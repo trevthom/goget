@@ -3,6 +3,7 @@
 //   • the pickup is NEVER filled in by the app; the search page shows "Set pickup on the map" and a hint about business names
 //   • the back arrow goes one screen back; Cancel / X cancel the planning and show the home screen
 //   • the pickup can be pinned (drag the map under the pin) or typed (a business name)
+//   • the DROP-OFF can be pinned on the map too ("Set drop-off on the map"); with both places set the quote opens
 //   • a driver whose phone gives only an APPROXIMATE location (accuracy 3 km) can go online and be seen by the rider
 // Takes about a minute. With E2E_TAILWIND set (see README.md) the pages are styled like the real app.
 import { boot, sleep, PICKUP } from "./harness.mjs";
@@ -98,6 +99,36 @@ try {
     const v = await R.getByLabel("Pickup location").inputValue();
     if (!/100 Main St/.test(v)) throw new Error("pickup is not the pinned spot: " + v);
     await mustSeeTabs(R, "search after pin");
+  });
+
+  await step("the rider pins the drop-off on the map too; Back keeps the pickup; confirming opens the quote", async () => {
+    await tap(R.getByRole("button", { name: "Back" }));
+    await home(R).waitFor({ timeout: 5000 });
+    await openSearch();
+    await pinPickup(R);
+    await R.getByRole("button", { name: /Set drop-off on the map/ }).waitFor({ timeout: 3000 });
+    await tap(R.getByRole("button", { name: /Set drop-off on the map/ }));
+    await R.getByText("Drop-off spot").waitFor({ timeout: 10000 });
+    await R.getByText("100 Main St, Lexington").first().waitFor({ timeout: 15000 });
+    await R.getByRole("button", { name: "Close and go home" }).waitFor({ timeout: 3000 });
+    await mustSeeTabs(R, "drop-off pin picker");
+    await tap(R.getByRole("button", { name: "Back" }));
+    await R.getByText("Plan your ride").waitFor({ timeout: 5000 });
+    if (!/100 Main St/.test(await R.getByLabel("Pickup location").inputValue())) throw new Error("Back from the drop-off pin lost the pickup");
+    if (await R.getByLabel("Where to?").inputValue()) throw new Error("Back from the drop-off pin must not set a drop-off");
+    await tap(R.getByRole("button", { name: /Set drop-off on the map/ }));
+    await R.getByText("Drop-off spot").waitFor({ timeout: 10000 });
+    await R.getByText("100 Main St, Lexington").first().waitFor({ timeout: 15000 });
+    await tap(R.getByRole("button", { name: "Confirm drop-off" }));
+    await R.getByText("Standard fare", { exact: true }).waitFor({ timeout: 15000 });
+    await mustSeeTabs(R, "quote after a pinned drop-off");
+    await tap(R.getByRole("button", { name: "Edit" }).first());
+    await R.getByText("Plan your ride").waitFor({ timeout: 5000 });
+    if (!/100 Main St/.test(await R.getByLabel("Where to?").inputValue())) throw new Error("the pinned drop-off is not in the Where to? field");
+    await tap(R.getByRole("button", { name: "Back" }));
+    await tap(R.getByRole("button", { name: "Close and go home" }));
+    await home(R).waitFor({ timeout: 5000 });
+    await openSearch(); await pinPickup(R); // leave the search page open with the pickup set, as the next step expects
   });
 
   await step("quote: tab bar, Back, the Cancel button and the X; search Back goes home", async () => {

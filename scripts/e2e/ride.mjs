@@ -1,5 +1,5 @@
 import { boot, sleep, PICKUP, DEST, metersNorth } from "./harness.mjs";
-import { pinPickup } from "./flow.mjs";
+import { pinPickup, openFold } from "./flow.mjs";
 import { tmpdir } from "node:os";
 const SC = tmpdir(); // failure screenshots go here
 const FLAT = process.env.FLAT === "1";
@@ -36,6 +36,7 @@ try {
   await step("rider logs in and adds funds with Lightning (ecash from the mint)", async () => {
     await h.login(R, h.rider, h.riderUrl);
     await R.getByRole("button", { name: "Account" }).click({ timeout: 40000 });
+    await openFold(R, "Ecash wallet");
     await R.getByRole("button", { name: /Add funds/ }).first().click();
     await R.getByRole("button", { name: "Show invoice" }).click();
     for (let i = 0; i < 40 && !h.mint.quotes.size; i++) await sleep(250);
@@ -209,7 +210,7 @@ try {
     if (sats(text).slice(0, 2).join() !== sats(later).slice(0, 2).join()) throw new Error(`rider and driver disagree: ${sats(later)} vs ${sats(text)}`);
     await D.getByRole("button", { name: "Back to driving" }).click();
     await D.getByRole("button", { name: "Account" }).click();
-    await D.getByText("Ecash wallet").waitFor();
+    await openFold(D, "Ecash wallet");
     const w = (await D.getByText("Balance").first().locator("..").innerText()).replace(/\s+/g, " ");
     log("     driver wallet:", w.slice(0, 100));
   });
