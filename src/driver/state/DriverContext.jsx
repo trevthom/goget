@@ -81,7 +81,7 @@ export function shownSats(request, rates, prices, usdPrice) {
 }
 
 export function DriverProvider({ children }) {
-  const { user, rideRequests, publish, refreshData, pullRecent, pushNotice, liveTick, btcPrice, usdPrice, prices, priceFor, ecash, isBlockedPk, blocked } = useApp();
+  const { user, rideRequests, publish, refreshData, pullRecent, pushNotice, liveTick, btcPrice, usdPrice, prices, priceFor, ecash, ecashOff, isBlockedPk, blocked } = useApp();
   const me = user.publicKey;
   const driveReady = isDriveReady(user);
   const { pos: myPosition, error: geoError, status: gps } = useGeolocation(true);
@@ -114,9 +114,10 @@ export function DriverProvider({ children }) {
   // ── Online / offline ──
   const [online, setOnline] = useState(false);
   // A good or an approximate GPS fix may go online (lib/gps.js canBeOnline); a stale, missing or very vague one may not.
-  const goOnline = useCallback(() => { if (driveReady && canBeOnline(gpsRef.current, posRef.current)) setOnline(true); }, [driveReady]);
+  // A driver is paid in ecash: with the wallet disconnected from this device, nothing could be received, so GO stays off.
+  const goOnline = useCallback(() => { if (driveReady && !ecashOff && canBeOnline(gpsRef.current, posRef.current)) setOnline(true); }, [driveReady, ecashOff]);
   const goOffline = useCallback(() => setOnline(false), []);
-  useEffect(() => { if (!driveReady) setOnline(false); }, [driveReady]);
+  useEffect(() => { if (!driveReady || ecashOff) setOnline(false); }, [driveReady, ecashOff]);
 
   // Public presence (coarsened) while online and free to take a ride.
   const visible = online && !activeDrive;

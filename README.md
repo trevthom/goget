@@ -96,7 +96,8 @@ and tip in one tap. The app reads your real balance from that wallet and never s
 still pay any invoice from another wallet.
 
 **Lost phone?** Your ecash is saved on the device. *Account → Recovery phrase* shows 12 words to write on paper (and asks you to type
-three back). With them, a new phone finds your ecash again at the mint (*Restore ecash from 12 words*). Keep the paper secret: whoever has the words can take the ecash.
+three back). With them, a new phone finds your ecash again at the mint (*Restore ecash from 12 words*); the money then sits under that phone's own new words, which you write down too. Keep the paper secret: whoever has the words can take the ecash.
+To take the wallet off a phone you are about to lose or sell, use *Account → Ecash wallet → Disconnect ecash from this device* (the coins are swapped and the wallet and its words are erased there; the money comes back with your 12 words).
 Every part of the Account screen opens and closes when you tap its title.
 
 ---

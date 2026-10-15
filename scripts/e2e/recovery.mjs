@@ -6,6 +6,9 @@
 //   • the phone is "lost": a fresh browser (no saved data) logs in with the same key, the wallet is empty, the 12 words typed into
 //     "Restore ecash" bring the balance back; a wrong phrase is refused with a reason
 //   • the lost phone's own coins were swapped during the restore (the mint calls them spent)
+//   • the restore moves the money under the NEW phone's own new 12 words (shown for writing down), not under the words that were typed
+//   • "Disconnect ecash from this device" on the old phone: its stale coins are dropped, the wallet and its phrase are erased, the phone says
+//     the wallet is not connected; "Connect ecash wallet" makes a new, empty wallet with different words
 // Takes about a minute. The pages are styled like the real app (Tailwind is built into the app CSS).
 import http from "node:http";
 import { boot, sleep, PICKUP } from "./harness.mjs";
@@ -27,7 +30,7 @@ const snap = async (p, name) => { if (process.env.E2E_SHOTS) { await sleep(600);
 const tabs = (p) => p.locator('nav[aria-label="Main"]');
 const header = (p, title) => p.locator("section h2 button", { hasText: title }).first();
 const balanceText = async (p) => (await p.getByText("Balance").first().locator("..").innerText()).replace(/\s+/g, " ");
-let phrase = "";
+let phrase = "", phrase2 = "";
 
 try {
   R = (await h.newContext("rider", PICKUP)).page;
@@ -141,7 +144,7 @@ try {
     if (/5,000 sats/.test(await balanceText(R2))) throw new Error("the new phone should start empty");
     await openFold(R2, "Recovery phrase");
     await tap(R2.getByRole("button", { name: "Restore ecash from 12 words" }));
-    const box = R2.getByLabel("Your 12 recovery words").last();
+    const box = R2.locator('textarea[aria-label="Your 12 recovery words"]');
     await box.fill("hello world");
     await R2.getByText(/12 words\. You typed 2/).waitFor({ timeout: 5000 });
     if (!(await R2.getByRole("button", { name: "Look for my ecash" }).isDisabled())) throw new Error("a wrong phrase should not be searchable");
@@ -153,11 +156,21 @@ try {
     await box.fill(phrase);
     await R2.getByText("These 12 words look right.").waitFor({ timeout: 5000 });
     await tap(R2.getByRole("button", { name: "Look for my ecash" }));
-    await R2.getByRole("list", { name: "Results" }).getByText(/found .*added to your wallet/).waitFor({ timeout: 30000 });
+    await R2.getByRole("list", { name: "Results" }).getByText(/found .*moved to your wallet/).waitFor({ timeout: 30000 });
     await snap(R2, "recovery-restored");
     if (!/5,000 sats/.test(await balanceText(R2))) throw new Error("expected 5,000 sats back: " + (await balanceText(R2)));
     if ((await box.inputValue()) !== "") throw new Error("the words should be cleared from the field after the search");
-    await R2.getByText("You wrote down your 12 words.").waitFor({ timeout: 5000 });
+    // The money is now under THIS phone's own new 12 words. The app asks for them at once: write them down and type three back.
+    const modalList = R2.getByRole("list", { name: "Your 12 recovery words" });
+    await modalList.waitFor({ timeout: 10000 });
+    const newWords = (await modalList.locator("li span.font-mono").allInnerTexts()).map((w) => w.trim());
+    if (newWords.join(" ") === phrase) throw new Error("the new phone took over the old words: it must make its own");
+    await tap(R2.getByRole("button", { name: "I wrote them down" }));
+    const asked = await R2.getByLabel(/^Word \d+$/).evaluateAll((els) => els.map((e) => Number(e.getAttribute("aria-label").slice(5))));
+    for (const n of asked) await R2.getByLabel(`Word ${n}`, { exact: true }).fill(newWords[n - 1]);
+    await tap(R2.getByRole("button", { name: "Check and finish" }));
+    await R2.getByText("You wrote down your 12 words.").waitFor({ timeout: 15000 });
+    phrase2 = newWords.join(" ");
   });
 
   await step("the lost phone's coins were swapped during the restore: it can no longer spend them", async () => {
@@ -165,6 +178,35 @@ try {
     await tap(R.getByRole("button", { name: "I lost a phone: swap my coins" }));
     await tap(R.getByRole("button", { name: "Swap them" }));
     await R.getByText(/Could not swap the ecash/).waitFor({ timeout: 30000 });
+  });
+
+  await step("the old phone: Disconnect ecash drops the stale coins and erases the wallet and its words from the device", async () => {
+    await openFold(R, "Ecash wallet");
+    await tap(R.getByRole("button", { name: "Disconnect ecash from this device" }));
+    await tap(R.getByRole("button", { name: "Swap coins and disconnect" }));
+    await R.getByText(/not connected on this device, so there is no ecash here/).waitFor({ timeout: 30000 });
+    const saved = await R.evaluate(() => {
+      const read = (prefix) => Object.keys(localStorage).filter((k) => k.startsWith(prefix)).map((k) => JSON.parse(localStorage.getItem(k)));
+      return { proofs: read("nostrride_ecash_"), phrase: read("nostrride_ecashphrase_"), off: read("nostrride_ecashOff_") };
+    });
+    if (saved.proofs.some((v) => v !== null)) throw new Error("the coins are still saved on the device");
+    if (saved.phrase.some((v) => v !== null)) throw new Error("the recovery phrase is still saved on the device");
+    if (!saved.off.includes(true)) throw new Error("the device does not remember that the wallet is disconnected");
+    if (await R.getByText(/Your ecash is not protected yet/).count()) throw new Error("the warning should be gone: there is no wallet");
+    await snap(R, "recovery-disconnected");
+  });
+
+  await step("Connect ecash wallet makes a new, empty wallet with different words", async () => {
+    await tap(R.getByRole("button", { name: "Connect ecash wallet" }));
+    await R.getByText("Balance").first().waitFor({ timeout: 20000 });
+    if (/5,000 sats/.test(await balanceText(R))) throw new Error("the new wallet should be empty");
+    await openFold(R, "Recovery phrase");
+    await tap(R.getByRole("button", { name: "Write down 12 words" }).first());
+    const list = R.getByRole("list", { name: "Your 12 recovery words" });
+    await list.waitFor({ timeout: 5000 });
+    const words = (await list.locator("li span.font-mono").allInnerTexts()).map((w) => w.trim()).join(" ");
+    if (words === phrase || words === phrase2) throw new Error("the new wallet reuses old words");
+    await tap(R.getByRole("button", { name: "Close", exact: true }));
   });
 
   for (const [n, p, role] of [["R2", R2, "rider"]]) { const u = await h.missingStyles(p, role); log("class names on screen with no CSS rule (R2):", u.length ? u.join(" ") : "none"); }

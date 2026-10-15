@@ -106,13 +106,14 @@ export default function OnlineHome() {
 
 function OfflineSheet() {
   const { myPosition, geoError, gps, goOnline, open } = useDriver();
+  const { ecashOff } = useApp();
   return (
     <Sheet label="You're offline">
       <div className="flex flex-col items-center text-center">
         <button
           type="button"
           onClick={goOnline}
-          disabled={!canBeOnline(gps, myPosition)}
+          disabled={!canBeOnline(gps, myPosition) || ecashOff}
           aria-label="Go online"
           className="w-24 h-24 rounded-full bg-[#05944f] text-white text-2xl font-extrabold tracking-wide shadow-[0_6px_18px_rgba(5,148,79,0.45)] active:scale-95 transition-transform disabled:bg-neutral-300 disabled:shadow-none"
         >
@@ -120,7 +121,9 @@ function OfflineSheet() {
         </button>
         <h2 className="text-xl font-bold mt-4">You're offline</h2>
         <p className="text-neutral-600 text-[15px] mt-1 max-w-xs" role="status">
-          {!canBeOnline(gps, myPosition)
+          {ecashOff
+            ? "Your ecash wallet is not connected on this device, so you cannot be paid. Connect it in Account."
+            : !canBeOnline(gps, myPosition)
             ? gpsMessage(gps, myPosition, geoError)
             : gps === "weak"
             ? approxNote(myPosition)

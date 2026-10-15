@@ -16,6 +16,7 @@ SHARE_CHECK=1 node scripts/e2e/ride.mjs   # the rider shares the trip: the share
 node scripts/e2e/vouches.mjs         # "Your vouches" in both apps: the badge on a request card and on an offer, one hop only, an nsec refused, Remove, the list on the relay; no stars
 node scripts/e2e/nav.mjs             # tab bar always visible, back arrow, X to cancel, pin the pickup and the drop-off, driver online on an approximate (3 km) location
 node scripts/e2e/recovery.mjs        # Account sections open and close (and are remembered); write down the 12 recovery words; a fresh browser restores the ecash from them; no phrase on any relay
+node scripts/e2e/disconnect.mjs      # the ecash wallet disconnected from the device: a driver's GO is off and says why; Connect makes a new empty wallet
 ```
 
 Each run builds both apps first (set `E2E_NOBUILD=1` to reuse `dist/`). The runs print one line per step and exit with code 0 only
