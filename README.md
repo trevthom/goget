@@ -70,7 +70,7 @@ that password. Use a different account in each app window to play both sides.
 2. Wait for **"Finding your driver…"**. Nearby online drivers are shown as cars on the map.
 
 **Driver app:**
-3. A **request card** pops up with the fare, pickup distance and the rider's rating. Tap **Accept**. For a flat price you can also **Ask for a different price** and type your counter. Set your own base, per-mile and per-minute rates under *Account → Your rates*; riders see them, and they are frozen once a rider chooses you.
+3. A **request card** pops up with the fare, pickup distance and, when someone you vouch for knows and trusts the rider, a vouch badge. Tap **Accept**. For a flat price you can also **Ask for a different price** and type your counter. Set your own base, per-mile and per-minute rates under *Account → Your rates*; riders see them, and they are frozen once a rider chooses you.
 
 **Rider app:**
 4. Pick a driver (counter-offers are marked; fastest first) → **Confirm driver**. There is **no deposit**; you only need a little ecash at the driver's mint to start.
@@ -82,7 +82,7 @@ that password. Use a different account in each app window to play both sides.
 **Both apps:**
 7. Each phone shows a 2-digit code. Type the code on the **other** person's phone. Then the driver taps **Start trip**.
 8. **The rider pays as the ride runs**: the base rate at the start, then every mile and every minute. Both screens show the fare so far.
-9. Either person taps **Finish ride** (and confirms). The rider pays what the ride earned. Rate each other. The driver may waive part of the fare. The trip shows up under *Earnings* (driver) and *Activity* (rider).
+9. Either person taps **Finish ride** (and confirms). The rider pays what the ride earned. The driver may waive part of the fare. The trip shows up under *Earnings* (driver) and *Activity* (rider).
 
 **Money:** payments are tiny ecash payments from the rider's wallet to the driver, made while the ride
 runs. If the rider misses **two payments**, the driver may finish the ride; the rider can refill the wallet
@@ -103,6 +103,7 @@ still pay any invoice from another wallet.
   to follow your car live, **SOS**, or report a problem. Before you get in, the app asks you to check the plate,
   car and driver. Add trusted contacts in *Account*.
 - **Block** a driver or rider from their profile or after a trip. Blocked people no longer show up for you.
+- **Vouch** for people you know and trust (*Account → Your vouches*: paste their npub). There are no star ratings or reviews. When someone you vouch for also vouches for a driver or rider, their card says "N of your vouches know and trust this person". Your list is public.
 - **Disputes:** every payment and confirmation is a signed record. The driver app counts a payment only when its own mint redeemed it, and can copy a **trip record** for whoever settles a dispute.
 - **Offline:** the apps install to your home screen, open offline, and send queued updates when you are back online.
 - **Background GPS** needs the native app in `native/` (see its README); a browser stops location when the screen sleeps.
@@ -116,6 +117,7 @@ still pay any invoice from another wallet.
   exact location goes only to the matched rider, encrypted.
 - A tip is optional and can be sent any time after a completed ride (Activity → the trip → Leave a tip).
 - Ride requests, price offers and replies are public on the relays you use.
+- Your **vouch list** (the npubs you know and trust) is public too.
 - Looking up your address from GPS sends your position (rounded to about 10 m) to the free Photon
   geocoder. Swap that service for your own before a real launch.
 

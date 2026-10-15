@@ -16,6 +16,7 @@ import TypicalFareSection from "../../features/profile/TypicalFareSection.jsx";
 import { driveGaps, gapsText } from "../../lib/profile.js";
 import LightningAddressSection from "../../features/profile/LightningAddressSection.jsx";
 import WalletSection from "../../features/profile/WalletSection.jsx";
+import VouchesSection from "../../features/profile/VouchesSection.jsx";
 import EcashSection from "../../features/ecash/EcashSection.jsx";
 import CurrencySection from "../../features/profile/CurrencySection.jsx";
 import KeysSection from "../../features/profile/KeysSection.jsx";
@@ -93,6 +94,7 @@ export default function AccountScreen() {
 
         <WalletSection />
         <ContactMethods />
+        <VouchesSection />
         <BlockedSection />
         <RelaysSection />
         <KeysSection user={user} />

@@ -1,7 +1,7 @@
 // ════════════════════════════════════════════════════════════
 //  DRIVE SUMMARY (driver) — Shown after a ride ends (either person finished it):
 //  what the ride earned (base + miles + minutes, or the flat price), what the rider
-//  has paid so far in ecash and what is still open, an optional rating of the rider,
+//  has paid so far in ecash and what is still open,
 //  and "Waive part of the fare" (the driver may waive all or part of it). If the rider
 //  finished the ride before it started: a short notice, nothing is owed.
 //  Ecash the rider pays later still arrives in the wallet (DriverContext redeems it).
@@ -19,7 +19,6 @@ import { waiversOf } from "../../lib/payments.js";
 import Money, { moneyText } from "../../ui/Money.jsx";
 import Button from "../../ui/Button.jsx";
 import Icon from "../../ui/Icon.jsx";
-import RatingForm from "../../ui/RatingForm.jsx";
 import AmountInput from "../../ui/AmountInput.jsx";
 import { Modal, inputCls } from "../../ui/Parts.jsx";
 import RiderInfo from "../components/RiderInfo.jsx";
@@ -31,9 +30,8 @@ const parse = (e) => { try { return JSON.parse(e.content); } catch { return null
 
 export default function DriveSummary({ request }) {
   const { user, btcPrice, liveTick, priceFor } = useApp();
-  const { dismissReceipt, rateRider, driveMoney, waiveFare } = useDriver();
+  const { dismissReceipt, driveMoney, waiveFare } = useDriver();
   void liveTick;
-  const [rated, setRated] = useState(false);
   const [waiving, setWaiving] = useState(false);
   const completed = rideStatus(request) === "completed";
   const trip = exactTrip(request, user) || parse(request);
@@ -97,13 +95,6 @@ export default function DriveSummary({ request }) {
 
         <div className="mt-6 pt-5 border-t border-neutral-100">
           <RiderInfo pubkey={request.pubkey} compact />
-          <div className="mt-5">
-            {rated ? (
-              <p className="text-center text-neutral-600 text-[15px]">Thanks for rating your rider.</p>
-            ) : (
-              <RatingForm who="rider" onSubmit={(stars, review) => { rateRider(request, stars, review); setRated(true); }} onSkip={() => setRated(true)} />
-            )}
-          </div>
         </div>
 
         <div className="mt-4"><BlockButton pubkey={request.pubkey} /></div>

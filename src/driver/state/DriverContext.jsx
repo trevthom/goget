@@ -11,7 +11,7 @@
 //    • the ride's MONEY: the driver's app redeems the rider's ecash ticks as they arrive, answers each
 //      one, keeps the ledger of what the ride has earned and counts MISSED payments (after two the
 //      driver may finish the ride)
-//    • actions: acceptRequest, arrive, startTrip, finishRide, waiveFare, answerPickup, answerStop, rateRider
+//    • actions: acceptRequest, arrive, startTrip, finishRide, waiveFare, answerPickup, answerStop
 // ════════════════════════════════════════════════════════════
 
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
@@ -466,24 +466,13 @@ export function DriverProvider({ children }) {
     [publish, refreshData, user, ecash, pushNotice, priceFor, btcPrice]
   );
 
-  const rateRider = useCallback(
-    (request, rating, review) => {
-      publish(
-        EVENT_KINDS.RATING,
-        { rating, review, rideId: request.id },
-        [["p", request.pubkey], ["e", request.id], ["d", "rating-" + request.id], ["t", "rating"]]
-      );
-    },
-    [publish]
-  );
-
   const value = {
     driveReady, myPosition, geoError, gps,
     online, goOnline, goOffline,
     radius, setRadius, alerts, setAlerts,
     open, decline, skip, skipped,
     activeDrive, pending, receipt, dismissReceipt, odo, agreed, driveMoney, tripMiles,
-    acceptRequest, answerPickup, answerStop, arrive, startTrip, finishRide, waiveFare, rateRider,
+    acceptRequest, answerPickup, answerStop, arrive, startTrip, finishRide, waiveFare,
   };
   return <DriverContext.Provider value={value}>{children}</DriverContext.Provider>;
 }
