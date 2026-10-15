@@ -30,8 +30,11 @@ assert.deepEqual(S.parseShareHash(`#k=${token}&r=javascript:alert(1),http://x,ws
 const fs = await import("node:fs");
 const { LOCATION_PING_MS } = await import("../src/config/settings.js");
 assert.equal(LOCATION_PING_MS, 6000);
-assert.ok(/const LOCATION_EVERY_MS = LOCATION_PING_MS/.test(fs.readFileSync(new URL("../src/driver/state/DriverContext.jsx", import.meta.url), "utf8")), "the driver's pings use the same constant");
-assert.ok(/setInterval\(\(\) => send\(false\), LOCATION_PING_MS\)/.test(fs.readFileSync(new URL("../src/rider/screens/OnTrip.jsx", import.meta.url), "utf8")), "and so does the shared trip");
+// (Each exported app repository holds only its own app, so a file that is not there is skipped.)
+const source = (rel) => { const u = new URL("../src/" + rel, import.meta.url); return fs.existsSync(u) ? fs.readFileSync(u, "utf8") : null; };
+const driverSrc = source("driver/state/DriverContext.jsx"), riderSrc = source("rider/screens/OnTrip.jsx");
+if (driverSrc) assert.ok(/const LOCATION_EVERY_MS = LOCATION_PING_MS/.test(driverSrc), "the driver's pings use the same constant");
+if (riderSrc) assert.ok(/setInterval\(\(\) => send\(false\), LOCATION_PING_MS\)/.test(riderSrc), "and so does the shared trip");
 const rider = { lat: 38.0406, lng: -84.5037, accuracy: 7.4 }, carAt = { lat: 38.05, lng: -84.51 };
 const base = { name: "Rae", driver: "Dina", car: "2020 Toyota Prius", plate: "KY ABC123", from: { name: "A", lat: 1, lng: 2 }, to: { name: "B", lat: 3, lng: 4 }, eta: 4 };
 const coming = Safety.sharePayload({ ...base, stage: "enroute", riderPos: rider, gps: "good", carLoc: carAt, now: 1000 });
