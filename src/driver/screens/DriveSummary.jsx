@@ -25,6 +25,7 @@ import RiderInfo from "../components/RiderInfo.jsx";
 import BlockButton from "../../ui/BlockButton.jsx";
 import EvidenceCard from "../components/EvidenceCard.jsx";
 import { tipsOf } from "../../lib/evidence.js";
+import FareBreakdown from "../../ui/FareBreakdown.jsx";
 
 const parse = (e) => { try { return JSON.parse(e.content); } catch { return null; } };
 
@@ -41,7 +42,8 @@ export default function DriveSummary({ request }) {
   const tipped = tipsOf(request).reduce((s, t) => s + t.sats, 0); // optional, from the rider, any time later
   // Worked out from the signed events (start time, finish event) so it is right on any device and after any restart.
   const terms = rideTerms(request);
-  const sum = ledgerSummary(request, terms ? currentLedger(request, { terms, price: priceFor(terms.currency), nowMs: Date.now(), miles: null, role: "driver" }) : null);
+  const ledger = terms ? currentLedger(request, { terms, price: priceFor(terms.currency), nowMs: Date.now(), miles: null, role: "driver" }) : null;
+  const sum = ledgerSummary(request, ledger);
   const waived = waiversOf(request).reduce((t, w) => ({ forgiven: t.forgiven + w.forgivenSats, refund: t.refund + w.refundSats }), { forgiven: 0, refund: 0 });
 
   if (!completed) {
@@ -70,6 +72,7 @@ export default function DriveSummary({ request }) {
           {sum.outstanding > 2 && <div className="flex justify-between"><dt className="font-semibold text-amber-700">Not paid yet</dt><dd><Money sats={sum.outstanding} className="font-bold" /></dd></div>}
           {tipped > 0 && <div className="flex justify-between"><dt className="font-semibold text-[#05683a]">Tip</dt><dd><Money sats={tipped} className="font-bold" /></dd></div>}
         </dl>
+        <FareBreakdown ledger={ledger} paidSats={sum.paid} className="mt-3 rounded-2xl bg-neutral-100 px-4 py-3" />
         {sum.outstanding > 2 && (
           <p className="text-neutral-600 text-sm mt-2">The rider can still refill their wallet and pay what is missed. It arrives in your ecash wallet by itself. {driveMoney?.missed ? `${driveMoney.missed} payments were missed during the ride.` : ""}</p>
         )}

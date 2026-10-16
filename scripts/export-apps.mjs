@@ -35,8 +35,8 @@ const skip = (p) => /(^|[\\/])(node_modules|dist)([\\/]|$)/.test(p);
 const copy = (from, to) => fs.cpSync(from, to, { recursive: true, filter: (p) => !skip(p) });
 
 const DESC = {
-  rider: 'Uber/Lyft-style: "Where to?", fare quote, find a driver, watch the car arrive, start with a 2-digit code, pay the driver in ecash as the ride runs, finish the ride, rate.',
-  driver: "Uber-Driver-style: GO online, incoming request cards, accept, navigate to pickup, arrive (within 50 m) / start code / finish the ride, ecash earnings.",
+  rider: 'Uber/Lyft-style: "Where to?", fare quote, find a driver, watch the car arrive, start with a 4-digit code (the driver shows it, the rider types it), pay the driver in ecash as the ride runs, finish the ride, rate.',
+  driver: "Uber-Driver-style: GO online, incoming request cards, accept, navigate to pickup, arrive (within 150 m) / start code / finish the ride, ecash earnings.",
 };
 const GENERATED = (role) =>
   `> **Generated repository.** This is a copy of the ${role} app made from **${OWNER}/nostr-ride** by \`scripts/export-apps.mjs\`. Make changes in nostr-ride and export again: a hand edit here is overwritten by the next export.\n`;

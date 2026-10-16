@@ -117,40 +117,42 @@ try {
     await R.getByRole("button", { name: "Close" }).click();
   });
 
-  await step("driver: Arrived is locked until within 50 m", async () => {
+  await step("driver: Arrived is locked until within 150 m", async () => {
     await D.getByText(/Pick up/).first().waitFor({ timeout: 40000 });
     await openSheet(D);
     const btn = D.getByRole("button", { name: "I've arrived" });
     await btn.waitFor();
     if (!(await btn.isDisabled())) throw new Error("the arrived button should be disabled 800 m away");
     log("     reason:", (await D.getByText(/You are \d+ m from the pickup/).first().innerText()));
-    await geo(dctx, metersNorth(PICKUP, 30));
+    await geo(dctx, metersNorth(PICKUP, 200));
+    await D.getByText(/You are 2\d\d m from the pickup. Get within 150 m/).first().waitFor({ timeout: 20000 });
+    if (!(await btn.isDisabled())) throw new Error("the arrived button should still be disabled 200 m away");
+    await geo(dctx, metersNorth(PICKUP, 120));
     for (let i = 0; i < 40 && (await btn.isDisabled()); i++) await sleep(500);
-    if (await btn.isDisabled()) throw new Error("still disabled at 30 m");
+    if (await btn.isDisabled()) throw new Error("still disabled at 120 m");
     await btn.click();
   });
 
-  let driverCode, riderCode;
-  await step("rider checks the car; both type the other's 2-digit code", async () => {
+  let startCode;
+  await step("rider checks the car; the rider types the driver's 4-digit start code", async () => {
     await R.getByText("Check before you get in").waitFor({ timeout: 40000 });
     await R.getByRole("button", { name: "It matches" }).click();
-    const rLabel = await R.getByLabel(/Your code is/).getAttribute("aria-label", { timeout: 15000 });
-    riderCode = rLabel.match(/\d\d/)[0];
-    const dLabel = await D.getByLabel(/Your code is/).getAttribute("aria-label", { timeout: 15000 });
-    driverCode = dLabel.match(/\d\d/)[0];
-    log(`     rider code ${riderCode}, driver code ${driverCode}`);
-    // A wrong code is refused.
-    const wrong = String((Number(driverCode) + 1) % 100).padStart(2, "0");
-    await R.locator("#driver-code").fill(wrong);
-    await R.getByRole("button", { name: "Confirm", exact: true }).click();
-    await R.getByText(/not the code on your driver/).waitFor({ timeout: 5000 });
-    await R.locator("#driver-code").fill(driverCode);
-    await R.getByRole("button", { name: "Confirm", exact: true }).click();
-    await D.getByText("Your rider typed your code.").waitFor({ timeout: 20000 });
+    if (await R.getByLabel(/The start code is/).count()) throw new Error("the rider's phone must not show the code");
+    const dLabel = await D.getByLabel(/The start code is/).getAttribute("aria-label", { timeout: 15000 });
+    startCode = dLabel.match(/\d{4}/)[0];
+    log(`     the start code on the driver's phone: ${startCode}`);
     const start = D.getByRole("button", { name: "Start trip" });
-    if (!(await start.isDisabled())) throw new Error("Start trip must wait for the driver to type the rider's code");
-    await D.locator("#rider-code").fill(riderCode);
-    await D.getByRole("button", { name: "Confirm", exact: true }).click();
+    if (!(await start.isDisabled())) throw new Error("Start trip must wait for the rider to type the code");
+    // A wrong code is refused.
+    const wrong = String((Number(startCode) + 1) % 10000).padStart(4, "0");
+    await R.locator("#start-code").fill(wrong);
+    await R.getByRole("button", { name: "Confirm", exact: true }).click();
+    await R.getByText(/not the 4-digit code on your driver/).waitFor({ timeout: 5000 });
+    if (!(await start.isDisabled())) throw new Error("a wrong code must not unlock Start trip");
+    await R.locator("#start-code").fill(startCode);
+    await R.getByRole("button", { name: "Confirm", exact: true }).click();
+    await D.getByText(/Your rider typed the code/).waitFor({ timeout: 20000 });
+    if (await D.locator("input[inputmode=numeric]").count()) throw new Error("the driver must not have to type anything");
     for (let i = 0; i < 20 && (await start.isDisabled()); i++) await sleep(300);
     await start.click();
   });
@@ -186,6 +188,14 @@ try {
     log("     rider meter:", (await R.getByText(/mi\b/).first().innerText().catch(() => "")).replace(/\s+/g, " ").slice(0, 80));
     if (rFare <= 2300) throw new Error("a minute (and a mile) should be on the fare by now: " + rFare);
     if (dPaid < rPaid - 500) throw new Error("the driver should have confirmed almost all payments");
+    // The four "Paid so far" lines on both screens: the base, the miles and the minutes paid until now.
+    const lines = async (P) => (await P.getByRole("group", { name: "Paid so far" }).innerText()).replace(/\s+/g, " ").trim();
+    const rLines = await lines(R), dLines = await lines(D);
+    log("     rider lines:", rLines);
+    log("     driver lines:", dLines);
+    for (const t of [rLines, dLines]) {
+      if (!/^Paid so far: Base rate: \$2\.00 Miles: [1-9]\d* \(\$\d+\.\d\d\) Minutes: [1-9]\d* \(\$\d+\.\d\d\)$/.test(t)) throw new Error("the Paid so far lines are wrong: " + t);
+    }
   });
 
   await step("rider finishes the ride (confirm dialog) and sees the receipt", async () => {

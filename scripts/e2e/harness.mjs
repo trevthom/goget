@@ -61,7 +61,10 @@ export async function boot({ feePpk = 0, driverRates = null } = {}) {
   seedDriver(driver);
 
   async function newContext(name, pos, extraStorage = {}, accuracy = 10) {
-    const ctx = await browser.newContext({ viewport: { width: 420, height: 880 }, geolocation: { latitude: pos.lat, longitude: pos.lng, accuracy }, permissions: ["geolocation"] });
+    // E2E_VIEWPORT=360x640 runs the pages like a phone of that size (touch, device pixel ratio 2, the page's viewport meta honoured).
+    const [vw, vh] = (process.env.E2E_VIEWPORT || "420x880").split("x").map(Number);
+    const phone = process.env.E2E_VIEWPORT ? { isMobile: true, hasTouch: true, deviceScaleFactor: 2 } : {};
+    const ctx = await browser.newContext({ viewport: { width: vw, height: vh }, ...phone, geolocation: { latitude: pos.lat, longitude: pos.lng, accuracy }, permissions: ["geolocation"] });
     await ctx.addInitScript(({ relayUrl, mintUrl, extra }) => {
       localStorage.setItem("nostrride_relays", JSON.stringify([relayUrl]));
       localStorage.setItem("nostrride_ecashMint", JSON.stringify(mintUrl));

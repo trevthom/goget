@@ -57,7 +57,7 @@ try {
     log("     needed:", (await R.getByText("Needed to start").locator("..").innerText()).replace(/\s+/g, " "));
     await R.getByRole("button", { name: "Confirm driver" }).click({ timeout: 15000 });
   });
-  await step("arrive, codes, start", async () => {
+  await step("arrive, start code, start", async () => {
     await D.getByText(/Pick up/).first().waitFor({ timeout: 40000 });
     await openSheet(D);
     const btn = D.getByRole("button", { name: "I've arrived" });
@@ -65,13 +65,10 @@ try {
     await btn.click();
     await R.getByText("Check before you get in").waitFor({ timeout: 40000 });
     await R.getByRole("button", { name: "It matches" }).click();
-    const riderCode = (await R.getByLabel(/Your code is/).getAttribute("aria-label", { timeout: 15000 })).match(/\d\d/)[0];
-    const driverCode = (await D.getByLabel(/Your code is/).getAttribute("aria-label", { timeout: 15000 })).match(/\d\d/)[0];
-    await R.locator("#driver-code").fill(driverCode);
+    const startCode = (await D.getByLabel(/The start code is/).getAttribute("aria-label", { timeout: 15000 })).match(/\d{4}/)[0];
+    await R.locator("#start-code").fill(startCode);
     await R.getByRole("button", { name: "Confirm", exact: true }).click();
-    await D.getByText("Your rider typed your code.").waitFor({ timeout: 20000 });
-    await D.locator("#rider-code").fill(riderCode);
-    await D.getByRole("button", { name: "Confirm", exact: true }).click();
+    await D.getByText(/Your rider typed the code/).waitFor({ timeout: 20000 });
     const start = D.getByRole("button", { name: "Start trip" });
     for (let i = 0; i < 20 && (await start.isDisabled()); i++) await sleep(300);
     await start.click();

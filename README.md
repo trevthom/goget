@@ -77,10 +77,10 @@ that password. Use a different account in each app window to play both sides.
 5. Watch the car come to you. The driver's exact position is end-to-end encrypted and only you can see it. Nothing is charged yet.
 
 **Driver app:**
-6. Follow the route to the pickup → **I've arrived** (works within 50 m of the pickup).
+6. Follow the route to the pickup → **I've arrived** (works within 150 m of the pickup).
 
 **Both apps:**
-7. Each phone shows a 2-digit code. Type the code on the **other** person's phone. Then the driver taps **Start trip**.
+7. The driver's phone shows a 4-digit code. The rider types it on the rider's phone. Then the driver taps **Start trip**.
 8. **The rider pays as the ride runs**: the base rate at the start, then every mile and every minute. Both screens show the fare so far.
 9. Either person taps **Finish ride** (and confirms). The rider pays what the ride earned. The driver may waive part of the fare. The trip shows up under *Earnings* (driver) and *Activity* (rider).
 

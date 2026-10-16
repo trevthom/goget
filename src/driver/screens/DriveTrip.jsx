@@ -1,8 +1,8 @@
 // ════════════════════════════════════════════════════════════
 //  DRIVE TRIP (driver) — A confirmed ride, in three steps that the driver
 //  moves forward with signed stage markers the rider's app reacts to:
-//    to pickup   → "I've arrived" (works only within 50 m of the pickup)
-//    at pickup   → "Start trip" (after both people typed the other's 2-digit code)
+//    to pickup   → "I've arrived" (works only within 150 m of the pickup)
+//    at pickup   → "Start trip" (after the rider typed the 4-digit start code shown on this phone)
 //    trip        → "Finish ride"
 //  The rider's exact pickup/dropoff arrives sealed (NIP-44) with the
 //  rider's confirmation; until then only the approximate area is known.
@@ -18,7 +18,7 @@ import { ARRIVE_RADIUS_METERS } from "../../config/settings.js";
 import { useApp } from "../../state/AppContext.jsx";
 import { useDriver } from "../state/DriverContext.jsx";
 import { rideConfirm, rideStage, rideTimes, rideKey } from "../../lib/rides.js";
-import { startCode, checkCode, attemptGate, recordAttempt } from "../../lib/startcode.js";
+import { startCode } from "../../lib/startcode.js";
 import { canMarkArrived } from "../../lib/arrival.js";
 import { fullTrip, nextStop, stopChanges, readStop } from "../../lib/stops.js";
 import { MISSED_LIMIT } from "../../lib/ticks.js";
@@ -27,6 +27,7 @@ import { useRideLink } from "../../features/payments/useRideLink.js";
 import { getSetting, setSetting } from "../../config/relays.js";
 import { moneyText } from "../../ui/Money.jsx";
 import { meterView } from "../../lib/meter.js";
+import FareBreakdown from "../../ui/FareBreakdown.jsx";
 import TripMeter, { peekMeter } from "../../ui/TripMeter.jsx";
 import { exactTrip } from "../../lib/privacy.js";
 import { acceptFor, offerFrom } from "../../lib/trips.js";
@@ -37,7 +38,7 @@ import Money from "../../ui/Money.jsx";
 import Button from "../../ui/Button.jsx";
 import Icon from "../../ui/Icon.jsx";
 import ContactSheet from "../../ui/ContactSheet.jsx";
-import { MapPage, Sheet } from "../../ui/Layout.jsx";
+import { MapPage, Sheet, StickyActions } from "../../ui/Layout.jsx";
 import { ConfirmDialog } from "../../ui/Parts.jsx";
 import RiderInfo, { useRiderInfo } from "../components/RiderInfo.jsx";
 import { pickupChange, PICKUP_CHANGE_NOTE } from "../../lib/pickup.js";
@@ -59,10 +60,6 @@ export default function DriveTrip({ request }) {
   const paid = accept ? parse(accept) : null;
   const [contact, setContact] = useState(false);
   const [ask, setAsk] = useState(null); // "finish" | "unpaid"
-  const [typed, setTyped] = useState("");
-  const [gate, setGate] = useState(null); // wrong-code tries
-  const [codeMsg, setCodeMsg] = useState("");
-  const [riderCodeOk, setRiderCodeOk] = useState(false); // the driver typed the rider's code
   const [dismissedMissed, setDismissedMissed] = useState(0); // "rider still with me": hide the missed-payments card until it grows
   const [now, setNow] = useState(Date.now());
   const [arrivedAt, setArrivedAt] = useState(null);
@@ -125,25 +122,16 @@ export default function DriveTrip({ request }) {
   });
   const meterText = peekMeter(view);
 
-  // Arrival: the button works only within 50 m of the pickup on a good GPS fix.
+  // Arrival: the button works only within 150 m of the pickup on a good GPS fix.
   const arrival = canMarkArrived({ pos: myPosition, status: gps, pickup });
   const canArrive = !!exact && arrival.ok;
 
-  // Starting: each phone shows its own 2-digit code; the driver types the code on the rider's phone, and the rider
-  // types the code on the driver's phone (a signed "code" confirmation).
+  // Starting: this phone shows a 4-digit start code; the rider types it on the rider's phone (a signed "code"
+  // confirmation), and "Start trip" unlocks when that confirmation arrives. The driver types nothing.
   const confirmNow = rideConfirm(request);
-  const gateState = attemptGate(gate, Date.now());
-  const myCode = startCode(user.sk, request.pubkey, key, "driver");
-  const riderCode = startCode(user.sk, request.pubkey, key, "rider");
-  const enterCode = () => {
-    if (!gateState.open) return;
-    const ok = checkCode(typed, riderCode);
-    setGate(recordAttempt(gate, ok, Date.now()));
-    if (ok) { setRiderCodeOk(true); setCodeMsg(""); setTyped(""); }
-    else setCodeMsg("That is not the code on your rider's phone. Ask your rider to read it to you.");
-  };
+  const code = startCode(user.sk, request.pubkey, key);
   const mismatchBoarded = confirmNow.boarded && !confirmNow.boarded.ok;
-  const canStart = riderCodeOk && !!confirmNow.code?.ok && !mismatchBoarded;
+  const canStart = !!confirmNow.code?.ok && !mismatchBoarded;
 
   // Money: what the ride has earned, what the rider has paid, how many payments are missed.
   const riding = stage === "riding";
@@ -197,6 +185,37 @@ export default function DriveTrip({ request }) {
       >
         <h2 className="text-2xl font-bold leading-tight">{title}</h2>
         <p className="text-neutral-600 text-[15px] mt-0.5" role="status">{sub}</p>
+        {/* Starting the ride: the rider types the 4-digit code shown here, which proves the rider is at the car */}
+        {stage === "arrived" && !mismatchBoarded && (
+          <div className="mt-3 rounded-2xl border-2 border-black p-4" role="group" aria-label="Start code">
+            <p className="font-bold">Start the ride</p>
+            <p className="text-xs text-neutral-600 mb-3">When your rider is at the car, tell your rider this code. Your rider types it on their phone.</p>
+            <div className="flex items-center justify-between rounded-xl bg-neutral-100 px-4 py-3">
+              <span className="text-sm text-neutral-600">Start code</span>
+              <span className="text-3xl font-extrabold tracking-widest tabular-nums" aria-label={`The start code is ${code}`}>{code}</span>
+            </div>
+            <p className={`text-sm mt-2 flex items-center gap-1 ${confirmNow.code?.ok ? "text-[#05944f] font-medium" : "text-neutral-500"}`}>
+              {confirmNow.code?.ok ? <><Icon name="check" size={16} /> Your rider typed the code. You can start the trip.</> : "Waiting for your rider to type the code."}
+            </p>
+          </div>
+        )}
+        {/* What the ride has earned and what the rider has paid, tick by tick */}
+        {riding && (
+          <div className="mt-3 rounded-2xl bg-neutral-100 px-4 py-3" role="group" aria-label="Fare so far">
+            <div className="flex items-baseline justify-between">
+              <span className="text-sm text-neutral-600">Fare so far</span>
+              <Money sats={driveMoney?.owed || 0} className="text-xl font-extrabold" />
+            </div>
+            <div className="flex items-baseline justify-between text-sm mt-1">
+              <span className="text-neutral-600">Paid by the rider</span>
+              <Money sats={driveMoney?.paid || 0} className="font-semibold" />
+            </div>
+            <FareBreakdown ledger={driveMoney?.ledger} paidSats={driveMoney?.paid || 0} className="mt-3 pt-3 border-t border-neutral-200" />
+            <p className="text-xs text-neutral-500 mt-2">
+              {flatOffer ? "Flat price: it does not grow with traffic or detours. " : ""}Your rates are frozen for this ride. Payments arrive in your ecash wallet as the ride runs.
+            </p>
+          </div>
+        )}
         <TripMeter view={view} className="mt-3" />
         {pendingChange && (
           <div className="mt-3 rounded-2xl border-2 border-black p-4" role="group" aria-label="Pickup change request">
@@ -225,22 +244,6 @@ export default function DriveTrip({ request }) {
           </p>
         )}
 
-        {/* What the ride has earned and what the rider has paid, tick by tick */}
-        {riding && (
-          <div className="mt-3 rounded-2xl bg-neutral-100 px-4 py-3" role="group" aria-label="Fare so far">
-            <div className="flex items-baseline justify-between">
-              <span className="text-sm text-neutral-600">Fare so far</span>
-              <Money sats={driveMoney?.owed || 0} className="text-xl font-extrabold" />
-            </div>
-            <div className="flex items-baseline justify-between text-sm mt-1">
-              <span className="text-neutral-600">Paid by the rider</span>
-              <Money sats={driveMoney?.paid || 0} className="font-semibold" />
-            </div>
-            <p className="text-xs text-neutral-500 mt-2">
-              {flatOffer ? "Flat price: it does not grow with traffic or detours. " : ""}Your rates are frozen for this ride. Payments arrive in your ecash wallet as the ride runs.
-            </p>
-          </div>
-        )}
         {showMissed && (
           <div className="mt-3 rounded-2xl border-2 border-amber-500 bg-amber-50 px-4 py-3" role="alert">
             <p className="font-bold text-amber-900">Your rider missed {missed} payments.</p>
@@ -314,41 +317,11 @@ export default function DriveTrip({ request }) {
 
         {nearTarget && (
           <p className="mt-3 text-sm font-medium text-[#05944f] bg-[#e6f4ec] rounded-xl px-3 py-2" role="status">
-            {stage === "riding" ? "You're at the next stop." : "You're close to the pickup. Get within 50 m to mark your arrival."}
+            {stage === "riding" ? "You're at the next stop." : "You're at the pickup. Tap I've arrived."}
           </p>
         )}
 
-        {/* Starting the ride: both people confirm they are at the car with a 2-digit code */}
-        {stage === "arrived" && !mismatchBoarded && (
-          <div className="mt-4 rounded-2xl border-2 border-black p-4" role="group" aria-label="Start code">
-            <p className="font-bold">Start the ride</p>
-            <p className="text-xs text-neutral-600 mb-3">Both of you must be at the car. Show your code to your rider, and type the code on your rider's phone.</p>
-            <div className="flex items-center justify-between rounded-xl bg-neutral-100 px-4 py-3">
-              <span className="text-sm text-neutral-600">Your code</span>
-              <span className="text-3xl font-extrabold tracking-widest tabular-nums" aria-label={`Your code is ${myCode}`}>{myCode}</span>
-            </div>
-            <p className={`text-sm mt-2 ${confirmNow.code?.ok ? "text-[#05944f] font-medium" : "text-neutral-500"}`}>
-              {confirmNow.code?.ok ? "Your rider typed your code." : "Waiting for your rider to type your code."}
-            </p>
-            {riderCodeOk ? (
-              <p className="mt-2 text-sm text-[#05944f] font-medium flex items-center gap-1"><Icon name="check" size={16} /> You typed your rider's code.</p>
-            ) : (
-              <div className="mt-3">
-                <label className="block text-sm font-semibold mb-1" htmlFor="rider-code">Your rider's code</label>
-                <div className="flex gap-2">
-                  <input id="rider-code" inputMode="numeric" autoComplete="off" maxLength={2} value={typed}
-                    onChange={(e) => { setTyped(e.target.value.replace(/\D/g, "")); setCodeMsg(""); }}
-                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); enterCode(); } }}
-                    placeholder="00" className="w-24 bg-neutral-100 rounded-xl px-4 py-3 text-2xl text-center font-bold tracking-widest focus:outline-none focus:ring-2 focus:ring-black" />
-                  <Button size="md" onClick={enterCode} disabled={typed.length !== 2 || !gateState.open}>Confirm</Button>
-                </div>
-                {!gateState.open && <p className="text-xs text-amber-700 mt-1" role="alert">Too many tries. Wait {Math.ceil(gateState.waitMs / 1000)} s.</p>}
-                {codeMsg && gateState.open && <p className="text-xs text-red-600 mt-1" role="alert">{codeMsg}</p>}
-              </div>
-            )}
-          </div>
-        )}
-        <div className="mt-5">
+        <StickyActions className="mt-5">
           {stage === "enroute" && (
             <>
               <Button variant="go" className={nearTarget ? "ring-4 ring-[#05944f]/30 animate-pulse" : ""} disabled={!canArrive} onClick={() => arrive(request, pickup)}>I've arrived</Button>
@@ -358,14 +331,14 @@ export default function DriveTrip({ request }) {
           {stage === "arrived" && (
             <>
               <Button variant="go" disabled={!canStart} onClick={() => startTrip(request)}>Start trip</Button>
-              {!canStart && <p className="text-xs text-neutral-500 text-center mt-1.5" role="status">{mismatchBoarded ? "Your rider says the car did not match." : "Start when you and your rider have typed each other's code."}</p>}
+              {!canStart && <p className="text-xs text-neutral-500 text-center mt-1.5" role="status">{mismatchBoarded ? "Your rider says the car did not match." : "Start when your rider has typed the start code."}</p>}
             </>
           )}
           {stage === "riding" && <Button variant="go" className={atEnd ? "ring-4 ring-[#05944f]/30 animate-pulse" : ""} onClick={() => setAsk("finish")}>Finish ride</Button>}
-          {stage !== "riding" && (
-            <Button variant="ghost" size="md" className="mt-1 !text-red-600" onClick={() => setAsk("finish")}>Finish ride</Button>
-          )}
-        </div>
+        </StickyActions>
+        {stage !== "riding" && (
+          <Button variant="ghost" size="md" className="mt-1 !text-red-600" onClick={() => setAsk("finish")}>Finish ride</Button>
+        )}
       </Sheet>
 
       <ContactSheet open={contact} onClose={() => setContact(false)} pubkey={request.pubkey} name={profile?.name} />

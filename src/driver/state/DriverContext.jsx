@@ -392,7 +392,7 @@ export function DriverProvider({ children }) {
     },
     [publish, refreshData, pushNotice]
   );
-  // "I've arrived" counts only within 50 m of the pickup on a good GPS fix (lib/arrival.js). The marker carries the
+  // "I've arrived" counts only within 150 m of the pickup on a good GPS fix (lib/arrival.js). The marker carries the
   // measured distance, so the rider's app can check it against the car's position.
   const arrive = useCallback(
     (request, pickup) => {

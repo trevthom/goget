@@ -30,7 +30,7 @@ import Money, { moneyText } from "../../ui/Money.jsx";
 import Button from "../../ui/Button.jsx";
 import Avatar from "../../ui/Avatar.jsx";
 import Icon from "../../ui/Icon.jsx";
-import { MapPage, Sheet, FloatButton } from "../../ui/Layout.jsx";
+import { MapPage, Sheet, FloatButton, StickyActions } from "../../ui/Layout.jsx";
 import { Spinner } from "../../ui/Parts.jsx";
 import { gpsMessage, canBeOnline, approxNote } from "../../lib/gps.js";
 import RiderInfo, { useRiderInfo } from "../components/RiderInfo.jsx";
@@ -261,12 +261,14 @@ function Incoming({ item, auto, onClose }) {
         You are paid in ecash at {mintLabel(getMyMint())} as the ride runs: your base rate at the start, then every mile and every minute. Your rates and mint are frozen once the rider chooses you. You get the exact pickup once {profile?.name || "the rider"} confirms you.
       </p>
 
-      <div className="flex gap-3 mt-4">
-        <Button variant="secondary" full={false} onClick={dismiss} aria-label="Decline" className="!px-5"><Icon name="x" size={22} /></Button>
-        <Button variant="go" onClick={accept} loading={busy} disabled={countering && !counterOk}>
-          {busy ? "Sending…" : flat && countering ? (counterOk ? `Counter ${moneyText(counterSats, btcPrice)}` : "Enter a higher price") : flat ? `Accept ${moneyText(fare, btcPrice)}` : "Accept"}
-        </Button>
-      </div>
+      <StickyActions className="mt-4">
+        <div className="flex gap-3">
+          <Button variant="secondary" full={false} onClick={dismiss} aria-label="Decline" className="!px-5"><Icon name="x" size={22} /></Button>
+          <Button variant="go" onClick={accept} loading={busy} disabled={countering && !counterOk}>
+            {busy ? "Sending…" : flat && countering ? (counterOk ? `Counter ${moneyText(counterSats, btcPrice)}` : "Enter a higher price") : flat ? `Accept ${moneyText(fare, btcPrice)}` : "Accept"}
+          </Button>
+        </div>
+      </StickyActions>
       {!busy && flat && (
         <button type="button" onClick={() => setCountering((v) => !v)} className="w-full text-center text-sm font-semibold underline mt-3">
           {countering ? `Accept ${moneyText(fare, btcPrice)} instead` : "Ask for a different price"}

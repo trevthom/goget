@@ -8,7 +8,7 @@ They are slow (one to six minutes) and are **not** part of `npm test`.
 ```bash
 npm i --no-save ws playwright        # extra tools, not saved in package.json
 npx playwright install chromium      # or set PLAYWRIGHT_BROWSERS_PATH to an existing browser
-node scripts/e2e/ride.mjs            # a standard-fare ride: fund, request, accept, 50 m arrival, codes, ticks, finish
+node scripts/e2e/ride.mjs            # a standard-fare ride: fund, request, accept, 150 m arrival, the 4-digit start code (typed by the rider), ticks, finish
 FLAT=1 node scripts/e2e/ride.mjs     # the same with a flat price
 node scripts/e2e/missed.mjs          # a wallet that runs dry: two missed payments, the driver finishes, refill, waiver and refund
 node scripts/e2e/stop.mjs            # an extra stop turns a flat price into the driver's normal fare
@@ -18,6 +18,8 @@ node scripts/e2e/nav.mjs             # tab bar always visible, back arrow, X to 
 node scripts/e2e/recovery.mjs        # Account sections open and close (and are remembered); write down the 12 recovery words; a fresh browser restores the ecash from them; no phrase on any relay
 node scripts/e2e/disconnect.mjs      # the ecash wallet disconnected from the device: a driver's GO is off and says why; Connect makes a new empty wallet
 ```
+
+`E2E_VIEWPORT=360x640` runs the same scripts in a phone-sized browser (touch, 2x pixels, the page's viewport meta honoured); with `E2E_SHOTS=/some/dir` a script saves screenshots. Check a new screen at 320x568 and 360x640.
 
 Each run builds both apps first (set `E2E_NOBUILD=1` to reuse `dist/`). The runs print one line per step and exit with code 0 only
 when every step passed and the pages raised no errors. `ride.mjs` and `missed.mjs` use the real clock, so a minute tick takes a real minute.
