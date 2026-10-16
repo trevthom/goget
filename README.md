@@ -159,7 +159,8 @@ npm test           # runs the automated checks
 
 Put each folder on any static host (they deploy separately, e.g. `ride.example.com` and
 `drive.example.com`). Location needs `https://`. Browsers stop GPS when the tab is in the
-background, so the driver app keeps the screen awake while online (where the browser allows it). A driver can go
+background, so the driver app keeps the screen awake while online (where the browser allows it). The rider app does the same during a ride:
+a sleeping page stops paying the ride's ecash ticks. A driver can go
 online with a good GPS fix (about 200 m or better) or an approximate one (up to 25 km), so a phone's "approximate location" works, but a laptop's rough IP position (or a stale one) never shows up as a car.
 
 **One repository per app.** `trevthom/nostr-ride-rider` and `trevthom/nostr-ride-driver` are generated
