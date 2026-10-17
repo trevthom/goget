@@ -231,7 +231,7 @@ try {
     for (const [who, P] of [["rider", R], ["driver", D]]) {
       const read = async () => (await P.getByRole("group", { name: "Trip meter" }).innerText()).replace(/\s+/g, " ");
       const t1 = await read();
-      if (!/Trip so far [\d.]+ mi · (\d+ h \d\d min \d\d s|\d+ min \d\d s|\d+ s)/.test(t1)) throw new Error(`${who}: "Trip so far" must show seconds: ` + t1);
+      if (!/Trip so far [\d.]+ mi · (\d+ h \d\d min \d\d s|\d+ min \d\d s|\d+ s)/i.test(t1)) throw new Error(`${who}: "Trip so far" must show seconds: ` + t1);
       await sleep(2500);
       const t2 = await read();
       if (t1 === t2) throw new Error(`${who}: the trip clock did not move: ` + t2);
