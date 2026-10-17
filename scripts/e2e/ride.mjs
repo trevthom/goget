@@ -131,9 +131,9 @@ try {
   });
 
   let startCode;
-  await step("rider checks the car; the rider types the driver's 4-digit start code", async () => {
-    await R.getByText("Check before you get in").waitFor({ timeout: 40000 });
-    await R.getByRole("button", { name: "It matches" }).click();
+  await step("the rider checks the car by eye (no button) and types the driver's 4-digit start code", async () => {
+    await R.locator("#start-code").waitFor({ state: "visible", timeout: 40000 }); // the code field is there at once: nothing to tap first
+    if (await R.getByRole("button", { name: /It matches|Doesn't match/ }).count()) throw new Error("the rider must not have to confirm the car");
     if (await R.getByLabel(/The start code is/).count()) throw new Error("the rider's phone must not show the code");
     const dLabel = await D.getByLabel(/The start code is/).getAttribute("aria-label", { timeout: 15000 });
     startCode = dLabel.match(/\d{4}/)[0];

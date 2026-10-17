@@ -63,8 +63,8 @@ try {
     const btn = D.getByRole("button", { name: "I've arrived" });
     for (let i = 0; i < 40 && (await btn.isDisabled()); i++) await sleep(500);
     await btn.click();
-    await R.getByText("Check before you get in").waitFor({ timeout: 40000 });
-    await R.getByRole("button", { name: "It matches" }).click();
+    await R.locator("#start-code").waitFor({ state: "visible", timeout: 40000 }); // the code field is there at once: nothing to tap first
+    if (await R.getByRole("button", { name: /It matches|Doesn't match/ }).count()) throw new Error("the rider must not have to confirm the car");
     const startCode = (await D.getByLabel(/The start code is/).getAttribute("aria-label", { timeout: 15000 })).match(/\d{4}/)[0];
     await R.locator("#start-code").fill(startCode);
     await R.getByRole("button", { name: "Confirm", exact: true }).click();

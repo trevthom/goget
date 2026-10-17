@@ -29,6 +29,7 @@ const OWNER = opt("--owner", "trevthom");
 const PUSH = args.includes("--push");
 const ROLES = opt("--only") ? [opt("--only")] : ["rider", "driver"];
 
+const SOURCE_COMMIT = (() => { try { return execFileSync("git", ["rev-parse", "--short", "HEAD"], { cwd: SRC, stdio: ["ignore", "pipe", "ignore"] }).toString().trim() || "unknown"; } catch { return "unknown"; } })();
 const read = (p) => fs.readFileSync(p, "utf8");
 const write = (p, s) => { fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, s); };
 const skip = (p) => /(^|[\\/])(node_modules|dist)([\\/]|$)/.test(p);
@@ -157,8 +158,9 @@ import tailwindcss from "tailwindcss";
 import autoprefixer from "autoprefixer";
 import { cspPlugin } from "./csp.mjs";
 
-// "2026-10-12 21:30 UTC": the build time (shown in Account, so a person can tell which version is running).
-const buildId = () => new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC";
+// "2026-10-12 21:30 UTC · from nostr-ride 9dbe842": the build time and the nostr-ride commit this app was exported from (shown in Account,
+// so a person can tell which version is running: the rider and the driver app must come from the same commit).
+const buildId = () => new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC · from nostr-ride ${SOURCE_COMMIT}";
 
 // The ${role} app of NostrRide, as its own project (generated; see scripts/export-apps.mjs in nostr-ride).
 // \`__APP_ROLE__\` is read in src/config/app.js. \`base: "./"\` lets the built
