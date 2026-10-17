@@ -7,20 +7,18 @@
 //    request   an incoming-request card with a countdown: Accept / Decline. It pops up by itself ONLY when
 //              "New request alerts" is on; with alerts off the driver opens requests from the list or the map.
 //    waiting   "Waiting for <rider> to confirm" after the driver accepted
-//  A rider either accepts each driver's STANDARD fare (the driver's own rates, paid tick by tick) or
-//  names a FLAT price. For a flat price the driver accepts it or counters with a higher one. Either way
-//  the reply is an offer carrying the driver's rates and mint; the rider picks a driver, which starts
-//  the drive (DriveTrip). There is no deposit: the rider pays in ecash as the ride runs.
+//  Every driver replies with their STANDARD fare (their own rates, paid tick by tick): an offer carrying
+//  the driver's rates and mint. The rider picks a driver, which starts the drive (DriveTrip). There is
+//  no deposit: the rider pays in ecash as the ride runs.
 // ════════════════════════════════════════════════════════════
 
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "../../state/AppContext.jsx";
 import { useDriver, fareOf, typicalSatsFor, shownSats } from "../state/DriverContext.jsx";
-import { driveMinutes, offerLimitsSats, pickupEta, roadMiles, ratesOrApp } from "../../lib/fare.js";
+import { driveMinutes, pickupEta, roadMiles, ratesOrApp } from "../../lib/fare.js";
 import { formatFiat } from "../../lib/currency.js";
 import { mintLabel } from "../../lib/mints.js";
 import { getMyMint } from "../../features/ecash/myMint.js";
-import AmountInput from "../../ui/AmountInput.jsx";
 import { haversineDistance } from "../../lib/geo.js";
 import { completedDrives, summarizeEarnings } from "../../lib/earnings.js";
 import { isScheduledLater } from "../../lib/trips.js";
@@ -115,7 +113,7 @@ function OfflineSheet() {
           onClick={goOnline}
           disabled={!canBeOnline(gps, myPosition) || ecashOff}
           aria-label="Go online"
-          className="w-24 h-24 rounded-full bg-[#05944f] text-white text-2xl font-extrabold tracking-wide shadow-[0_6px_18px_rgba(5,148,79,0.45)] active:scale-95 transition-transform disabled:bg-neutral-300 disabled:shadow-none"
+          className="w-24 h-24 rounded-full bg-[#05944f] text-[#fff] text-2xl font-extrabold tracking-wide shadow-[0_6px_18px_rgba(5,148,79,0.45)] active:scale-95 transition-transform disabled:bg-neutral-300 disabled:shadow-none"
         >
           GO
         </button>
@@ -166,32 +164,23 @@ function Incoming({ item, auto, onClose }) {
   const { request, content: c, miles } = item;
   const [left, setLeft] = useState(REQUEST_CARD_SECONDS);
   const [busy, setBusy] = useState(false);
-  const [countering, setCountering] = useState(false); // the driver is naming a different price
   const { profile } = useRiderInfo(request.pubkey);
 
-  // The countdown pauses while the driver is naming a counter-offer.
   useEffect(() => {
-    if (!auto || countering) return;
+    if (!auto) return;
     const id = setInterval(() => setLeft((s) => s - 1), 1000);
     return () => clearInterval(id);
-  }, [auto, countering]);
+  }, [auto]);
   useEffect(() => { if (auto && left <= 0) skip(request); }, [left]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const flat = c.fareMode === "flat";
   const typical = typicalSatsFor(request, user.rates, prices); // this driver's own fare for the trip (null while its price is unknown)
-  const fare = flat ? fareOf(request, usdPrice) : typical ?? fareOf(request, usdPrice);
+  const fare = typical ?? fareOf(request, usdPrice);
   const rates = ratesOrApp(user.rates);
   const tripMiles = c.distanceMiles ?? roadMiles(haversineDistance(c.pickup.lat, c.pickup.lng, c.dropoff.lat, c.dropoff.lng));
   const tripMin = c.durationMin ?? driveMinutes(tripMiles);
   const awayMin = miles != null ? pickupEta(miles) : null;
 
-  // A counter-offer can be any amount above the rider's offer, up to 3x the suggested price.
-  // It starts at the driver's own typical fare for this trip, if that is higher than the offer.
-  const limits = offerLimitsSats(Math.max(c.suggestedSats || 0, fare), usdPrice);
-  const [counterSats, setCounterSats] = useState(() => (typical > fare ? typical : Math.round(fare * 1.1)));
-  const counterOk = Number.isFinite(counterSats) && counterSats > fare && counterSats <= limits.max;
-
-  const accept = () => { if (countering && !counterOk) return; setBusy(true); acceptRequest(request, flat && countering ? Math.round(counterSats) : undefined); };
+  const accept = () => { setBusy(true); acceptRequest(request); };
   const dismiss = () => { decline(request); onClose(); };
 
   return (
@@ -205,7 +194,7 @@ function Incoming({ item, auto, onClose }) {
 
       <div className="flex items-end justify-between">
         <div>
-          <p className="text-xs font-semibold text-neutral-500 mb-0.5">{flat ? "Rider's flat price" : "Your standard fare, about"}</p>
+          <p className="text-xs font-semibold text-neutral-500 mb-0.5">Your standard fare, about</p>
           <Money sats={fare} stacked className="text-4xl font-extrabold tracking-tight" subClassName="text-neutral-500 text-sm" />
         </div>
         <div className="text-right text-sm text-neutral-600">
@@ -230,32 +219,9 @@ function Incoming({ item, auto, onClose }) {
       <div className="mt-4 pt-3 border-t border-neutral-100"><RiderInfo pubkey={request.pubkey} compact /></div>
       {c.notes && <p className="mt-2 text-sm text-neutral-600 bg-neutral-100 rounded-xl px-3 py-2">“{c.notes}”</p>}
 
-      {flat ? (
-        <p className={`text-xs mt-3 ${typical > fare ? "text-amber-700" : "text-neutral-500"}`}>
-          Your standard fare for this trip: {typical != null ? moneyText(typical, btcPrice) : "not known yet"}{typical > fare ? ". The flat price is below it." : "."}
-          {" "}A flat price never grows with traffic or detours.
-        </p>
-      ) : (
-        <p className="text-xs mt-3 text-neutral-500">
-          The rider pays your rates as the ride runs: {formatFiat(rates.base, rates.currency)} base, {formatFiat(rates.perMile, rates.currency)}/mi, {formatFiat(rates.perMinute, rates.currency)}/min.
-        </p>
-      )}
-
-      {flat && countering && (
-        <div className="mt-3 rounded-2xl bg-neutral-100 px-4 py-3">
-          <p className="text-center text-xs font-semibold uppercase tracking-wider text-neutral-500 mb-2">Your counter-offer</p>
-          <AmountInput
-            sats={counterSats}
-            rate={btcPrice}
-            min={fare + 1}
-            max={limits.max}
-            minMessage={`Must be more than the rider's offer (${moneyText(fare, btcPrice)}).`}
-            onChange={setCounterSats}
-            label="Counter-offer"
-          />
-          <p className="text-center text-xs text-neutral-500 mt-2">The rider sees your price next to other drivers' and chooses.</p>
-        </div>
-      )}
+      <p className="text-xs mt-3 text-neutral-500">
+        The rider pays your rates as the ride runs: {formatFiat(rates.base, rates.currency)} base, {formatFiat(rates.perMile, rates.currency)}/mi, {formatFiat(rates.perMinute, rates.currency)}/min.
+      </p>
 
       <p className="text-xs text-neutral-500 mt-3">
         You are paid in ecash at {mintLabel(getMyMint())} as the ride runs: your base rate at the start, then every mile and every minute. Your rates and mint are frozen once the rider chooses you. You get the exact pickup once {profile?.name || "the rider"} confirms you.
@@ -264,16 +230,9 @@ function Incoming({ item, auto, onClose }) {
       <StickyActions className="mt-4">
         <div className="flex gap-3">
           <Button variant="secondary" full={false} onClick={dismiss} aria-label="Decline" className="!px-5"><Icon name="x" size={22} /></Button>
-          <Button variant="go" onClick={accept} loading={busy} disabled={countering && !counterOk}>
-            {busy ? "Sending…" : flat && countering ? (counterOk ? `Counter ${moneyText(counterSats, btcPrice)}` : "Enter a higher price") : flat ? `Accept ${moneyText(fare, btcPrice)}` : "Accept"}
-          </Button>
+          <Button variant="go" onClick={accept} loading={busy}>{busy ? "Sending…" : "Accept"}</Button>
         </div>
       </StickyActions>
-      {!busy && flat && (
-        <button type="button" onClick={() => setCountering((v) => !v)} className="w-full text-center text-sm font-semibold underline mt-3">
-          {countering ? `Accept ${moneyText(fare, btcPrice)} instead` : "Ask for a different price"}
-        </button>
-      )}
     </Sheet>
   );
 }
@@ -297,7 +256,7 @@ function Waiting({ pending, onStop }) {
       </div>
       <div className="mt-4 pt-3 border-t border-neutral-100 text-[15px]">
         <p className="font-medium truncate">{c.pickup.name} → {c.dropoff.name}</p>
-        <p className="text-neutral-600 mt-0.5"><Money sats={JSON.parse(offer.content).priceSats} className="font-semibold" /> {JSON.parse(offer.content).mode !== "flat" ? "standard fare (estimate)" : JSON.parse(offer.content).priceSats > (c.fareSats || 0) && c.fareSats ? "counter-offer" : "flat price"}</p>
+        <p className="text-neutral-600 mt-0.5"><Money sats={JSON.parse(offer.content).priceSats} className="font-semibold" /> standard fare (estimate)</p>
       </div>
       <Button variant="secondary" size="md" className="mt-4" onClick={onStop}>Keep browsing requests</Button>
       <p className="text-neutral-500 text-xs text-center mt-2">If the rider still confirms you, the pickup appears right away.</p>

@@ -33,7 +33,7 @@ import { rideTerms, rideMint } from "../../lib/terms.js";
 import { milesAt, missedTicks, MISSED_LIMIT } from "../../lib/ticks.js";
 import { paidSats, waiverEvent } from "../../lib/payments.js";
 import { waiverSplit } from "../../lib/finish.js";
-import { stopReplyEvent, STOP_NOTE_FLAT } from "../../lib/stops.js";
+import { stopReplyEvent } from "../../lib/stops.js";
 import { redeemAllFor } from "../../features/payments/redeemTicks.js";
 import { getMyMint } from "../../features/ecash/myMint.js";
 import { isDriveReady } from "../../lib/profile.js";
@@ -73,11 +73,9 @@ export function typicalSatsFor(request, rates, prices) {
   return typicalSats(rates, miles, minutes, prices);
 }
 
-// What to show a driver for a request: the rider's flat price, or (for the standard fare) this driver's own estimate.
+// What to show a driver for a request: this driver's own estimate (the app's formula if the price is not known yet).
 export function shownSats(request, rates, prices, usdPrice) {
-  const c = parse(request) || {};
-  if (c.fareMode === "standard") return typicalSatsFor(request, rates, prices) ?? fareOf(request, usdPrice);
-  return fareOf(request, usdPrice);
+  return typicalSatsFor(request, rates, prices) ?? fareOf(request, usdPrice);
 }
 
 export function DriverProvider({ children }) {
@@ -256,10 +254,16 @@ export function DriverProvider({ children }) {
   const hadPending = useRef(null);
   useEffect(() => {
     if (pending) { hadPending.current = pending.request; return; }
-    if (hadPending.current && !activeDrive) {
-      pushNotice(declinedDrivers(hadPending.current).has(me) ? "The rider chose not to ride with you for that request. It is still open for other drivers." : "That ride is no longer available.");
-    }
+    const gone = hadPending.current;
     hadPending.current = null;
+    if (!gone || activeDrive) return;
+    // When the rider chooses ME, the accept and the in-progress request can reach this phone a moment after my offer
+    // disappears: wait a little before saying the ride went away (a new drive cancels the timer through the cleanup).
+    const t = setTimeout(() => {
+      if (latest.current.activeDrive) return;
+      pushNotice(declinedDrivers(gone).has(me) ? "The rider chose not to ride with you for that request. It is still open for other drivers." : "That ride is no longer available.");
+    }, 4000);
+    return () => clearTimeout(t);
   }, [pending?.request.id, !!activeDrive]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── The ride's money ──
@@ -317,16 +321,14 @@ export function DriverProvider({ children }) {
 
   // ── Actions ──
   // "I'll take it": offer to drive. The offer carries this driver's rates and mint (copied: they are frozen
-  // for the ride once the rider chooses it). For a standard-fare request the price is this driver's own estimate;
-  // for a flat-price request the driver accepts the rider's price, or counters with a higher `priceSats`.
+  // for the ride once the rider chooses it). The price in the offer is this driver's own estimate.
   const acceptRequest = useCallback(
-    (request, priceSats) => {
+    (request) => {
       const c = parse(request);
-      const flat = c.fareMode === "flat";
       const rates = normalizeRates(user.rates) || APP_RATES;
       const mint = getMyMint();
       const estimate = typicalSatsFor(request, user.rates, prices);
-      const fare = flat ? (priceSats > 0 ? Math.round(priceSats) : fareOf(request, usdPrice)) : estimate;
+      const fare = estimate;
       if (!(fare > 0)) { pushNotice(`The bitcoin price for ${rates.currency} is not available yet. Try again in a moment.`); return Promise.resolve(false); }
       const miles = myPosition ? haversineDistance(myPosition.lat, myPosition.lng, c.pickup.lat, c.pickup.lng) : null;
       const demo = request.tags.some((t) => t[0] === "demo");
@@ -335,7 +337,7 @@ export function DriverProvider({ children }) {
         EVENT_KINDS.RIDE_OFFER,
         {
           priceSats: fare,
-          mode: flat ? "flat" : "metered", // metered = this driver's standard fare, paid tick by tick; flat = the agreed price
+          mode: "metered", // this driver's standard fare, paid tick by tick (the price above is only an estimate)
           rates, // a copy of this driver's rates, frozen once the rider chooses this offer
           mint, // the ecash mint this driver is paid at
           tripMiles: tripMi,
@@ -362,7 +364,7 @@ export function DriverProvider({ children }) {
       refreshData();
       return sent;
     },
-    [publish, refreshData, myPosition, user, prices, usdPrice, pushNotice]
+    [publish, refreshData, myPosition, user, prices, pushNotice]
   );
 
   const mark = useCallback(
@@ -411,14 +413,14 @@ export function DriverProvider({ children }) {
       const ev = stopReplyEvent(request, changeId, accepted);
       publish(ev.kind, ev.content, ev.tags);
       refreshData();
-      pushNotice(accepted ? `Stop accepted. ${rideTerms(request)?.mode === "flat" ? STOP_NOTE_FLAT : "The rider pays your normal fare for the extra distance and time."}` : "You did not accept the stop. You can finish the ride, or keep driving the first trip.");
+      pushNotice(accepted ? "Stop accepted. The rider pays your normal fare for the extra distance and time." : "You did not accept the stop. You can finish the ride, or keep driving the first trip.");
     },
     [publish, refreshData, pushNotice]
   );
 
   // Finish the ride (there are no cancellations, and no fees for finishing). The rider owes what the ride earned up to
   // now: the base, the miles and the minutes (the signed event carries the clock and the meter). `atDestination` =
-  // the driver is at the end of the trip: a flat price is then owed in full. `reason`: "driver" | "destination" |
+  // the driver is at the end of the trip. `reason`: "driver" | "destination" |
   // "unpaid" (the rider missed payments) | "silence" (both phones silent: the charge runs to `cutoff`).
   const finishRide = useCallback(
     (request, { reason = "driver", atDestination = false, cutoff } = {}) => {

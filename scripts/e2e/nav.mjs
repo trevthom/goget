@@ -28,7 +28,7 @@ const openSearch = async () => { await tap(home(R)); await R.getByText("Plan you
 const toQuote = async () => {
   await R.getByLabel("Where to?").fill("Blue Grass");
   await R.getByRole("button", { name: /Blue Grass Airport/ }).first().click({ timeout: 10000 });
-  await R.getByText("Standard fare", { exact: true }).waitFor({ timeout: 15000 });
+  await R.getByRole("button", { name: /Request ride · / }).waitFor({ timeout: 15000 });
 };
 try {
   ({ page: D } = await h.newContext("driver", PICKUP, {}, 3000)); // approximate: accurate to 3 km
@@ -120,7 +120,7 @@ try {
     await R.getByText("Drop-off spot").waitFor({ timeout: 10000 });
     await R.getByText("100 Main St, Lexington").first().waitFor({ timeout: 15000 });
     await tap(R.getByRole("button", { name: "Confirm drop-off" }));
-    await R.getByText("Standard fare", { exact: true }).waitFor({ timeout: 15000 });
+    await R.getByRole("button", { name: /Request ride · / }).waitFor({ timeout: 15000 });
     await mustSeeTabs(R, "quote after a pinned drop-off");
     await tap(R.getByRole("button", { name: "Edit" }).first());
     await R.getByText("Plan your ride").waitFor({ timeout: 5000 });

@@ -66,7 +66,7 @@ try {
     await pinPickup(R);
     await R.getByLabel("Where to?").fill("Blue Grass");
     await R.getByRole("button", { name: /Blue Grass Airport/ }).first().click({ timeout: 10000 });
-    await R.getByText("Standard fare", { exact: true }).waitFor({ timeout: 15000 });
+    await R.getByRole("button", { name: /Request ride · / }).waitFor({ timeout: 15000 });
     await R.getByPlaceholder(/Note for the driver/).fill("Gate B, two bags");
     await R.getByRole("button", { name: /Request ride · / }).click({ timeout: 15000 });
     await R.getByText("Finding your driver").first().waitFor({ timeout: 15000 });

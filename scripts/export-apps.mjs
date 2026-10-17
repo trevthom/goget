@@ -130,20 +130,12 @@ ${role === "driver" ? "- `native/`: Capacitor shell for background GPS (untested
 }
 
 // The exported project has index.html (and track.html) at its root, so the scan paths differ from the main repo's.
+// Everything else (the dark-mode color variables, darkMode: "class") is taken from the main repo's tailwind.config.js, so the two cannot drift apart.
 function tailwindConfig() {
-  return `// Tailwind CSS v3, built into the app's own CSS (see vite.config.js). \`content\` lists every file whose class names get CSS:
-// write each class out in full ("bg-" + color is not found). Do NOT use Tailwind v4 or @tailwindcss/vite (native binary).
-import { dirname } from "node:path";
-import { fileURLToPath } from "node:url";
-
-const root = dirname(fileURLToPath(import.meta.url));
-
-export default {
-  content: [\`\${root}/*.html\`, \`\${root}/src/**/*.{js,jsx}\`],
-  theme: { extend: {} },
-  plugins: [],
-};
-`;
+  const main = read(path.join(SRC, "tailwind.config.js"));
+  const content = /^  content: \[.*\],$/m;
+  if (!content.test(main)) throw new Error("export: the content line of tailwind.config.js was not found");
+  return main.replace(content, "  content: [`${root}/*.html`, `${root}/src/**/*.{js,jsx}`],");
 }
 
 function viteConfig(role, port) {

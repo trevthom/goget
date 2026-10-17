@@ -2,7 +2,7 @@
 //  NEARBY REQUESTS (driver) — "See nearby requests": a list of every open ride request inside the
 //  driver's request radius, closest first. It works with the new-request alerts on or off. Each row shows what a
 //  driver needs to decide:
-//    pickup · dropoff · the fare (the rider's flat price, or this driver's own estimate for a standard fare) ·
+//    pickup · dropoff · the fare (this driver's own estimate) ·
 //    drive time to the rider · the trip's distance · the trip's drive time · the rider's note to the driver
 //  Tapping a row opens that request (Accept / Decline) on the map page; the driver comes back to this list afterwards.
 // ════════════════════════════════════════════════════════════
@@ -21,7 +21,6 @@ const whenText = (time) => (time === "ASAP" ? "Now" : new Date(time).toLocaleStr
 export function requestFacts({ request, content: c, miles }, rates, prices, usdPrice) {
   const tripMiles = c.distanceMiles ?? roadMiles(haversineDistance(c.pickup.lat, c.pickup.lng, c.dropoff.lat, c.dropoff.lng));
   return {
-    flat: c.fareMode === "flat",
     sats: shownSats(request, rates, prices, usdPrice),
     awayMin: miles != null ? pickupEta(miles) : null,
     tripMiles,
@@ -58,7 +57,7 @@ export default function NearbyRequests({ onBack, onPick }) {
                       </div>
                       <div className="text-right shrink-0">
                         <Money sats={f.sats} className="font-bold" />
-                        <p className="text-xs text-neutral-500">{f.flat ? "flat price" : "your fare, about"}</p>
+                        <p className="text-xs text-neutral-500">your fare, about</p>
                       </div>
                       <Icon name="chevron-right" size={18} className="text-neutral-400 mt-1" />
                     </div>

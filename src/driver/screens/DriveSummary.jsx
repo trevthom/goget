@@ -1,6 +1,6 @@
 // ════════════════════════════════════════════════════════════
 //  DRIVE SUMMARY (driver) — Shown after a ride ends (either person finished it):
-//  what the ride earned (base + miles + minutes, or the flat price), what the rider
+//  what the ride earned (base + miles + minutes), what the rider
 //  has paid so far in ecash and what is still open,
 //  and "Waive part of the fare" (the driver may waive all or part of it). If the rider
 //  finished the ride before it started: a short notice, nothing is owed.
@@ -76,7 +76,7 @@ export default function DriveSummary({ request }) {
         {sum.outstanding > 2 && (
           <p className="text-neutral-600 text-sm mt-2">The rider can still refill their wallet and pay what is missed. It arrives in your ecash wallet by itself. {driveMoney?.missed ? `${driveMoney.missed} payments were missed during the ride.` : ""}</p>
         )}
-        <p className="text-neutral-500 text-xs mt-2">Payments arrived in your ecash wallet as the ride ran. Cash out to your Lightning address in Account.</p>
+        <p className="text-neutral-500 text-xs mt-2">Payments arrived in your ecash wallet as the ride ran. Cash out from Account.</p>
         {(waived.forgiven > 0 || waived.refund > 0) && <p className="text-neutral-600 text-sm mt-2">You waived {moneyText(waived.forgiven + waived.refund, btcPrice)}{waived.refund > 0 ? `, and sent ${moneyText(waived.refund, btcPrice)} back to the rider` : ""}.</p>}
         {(sum.outstanding > 2 || sum.paid > 0) && (
           <button type="button" onClick={() => setWaiving(true)} className="mt-3 text-sm font-semibold underline">Waive part of the fare</button>

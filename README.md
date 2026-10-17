@@ -60,20 +60,20 @@ that password. Use a different account in each app window to play both sides.
 
 **Driver app** (once):
 1. **Account** tab → add a **photo**, your **vehicle** (year, make, model, plate, and a photo of the car), and a
-   **Lightning address** (like `you@wallet.com`; you cash out there). Check the **ecash mint** you are paid at (*Account → Ecash wallet*).
+   **Cash out location** (a Lightning address, like `you@wallet.com`; you cash out there). Check the **ecash mint** you are paid at (*Account → Ecash wallet*).
 2. **Drive** tab → tap the green **GO** button (allow location when asked).
 
 **Rider app:**
 0. **Account** → pick your **currency** and add money to your **ecash wallet** (**Add funds**: pay a Lightning invoice, in one tap with a connected wallet).
-1. **Where to?** → set the pickup (type an address or a business name, or pin it on the map) and the destination → choose **Standard fare** (each driver's own rates) or **Flat price** (type your own price, in your currency or sats) → **Request ride**.
+1. **Where to?** → set the pickup (type an address or a business name, or pin it on the map) and the destination → see the suggested fare (each driver charges their own rates) → **Request ride**.
    Optional: show female or male drivers first. (Pick **Schedule** to reserve a ride for later: it waits under *Activity → Upcoming*.)
 2. Wait for **"Finding your driver…"**. Nearby online drivers are shown as cars on the map.
 
 **Driver app:**
-3. A **request card** pops up with the fare, pickup distance and, when someone you vouch for knows and trusts the rider, a vouch badge. Tap **Accept**. For a flat price you can also **Ask for a different price** and type your counter. Set your own base, per-mile and per-minute rates under *Account → Your rates*; riders see them, and they are frozen once a rider chooses you.
+3. A **request card** pops up with the fare, pickup distance and, when someone you vouch for knows and trusts the rider, a vouch badge. Tap **Accept**. Set your own base, per-mile and per-minute rates under *Account → Your rates*; riders see them, and they are frozen once a rider chooses you.
 
 **Rider app:**
-4. Pick a driver (counter-offers are marked; fastest first) → **Confirm driver**. There is **no deposit**; you only need a little ecash at the driver's mint to start.
+4. Pick a driver (fastest first) → **Confirm driver**. There is **no deposit**; you only need a little ecash at the driver's mint to start.
 5. Watch the car come to you. The driver's exact position is end-to-end encrypted and only you can see it. Nothing is charged yet.
 
 **Driver app:**
@@ -86,8 +86,7 @@ that password. Use a different account in each app window to play both sides.
 
 **Money:** payments are tiny ecash payments from the rider's wallet to the driver, made while the ride
 runs. If the rider misses **two payments**, the driver may finish the ride; the rider can refill the wallet
-and pay what is missed. A flat price never grows with traffic. Adding a stop turns a flat price into the driver's
-normal fare. All charges are shown in your local currency and paid in sats. A **mint** holds the money behind ecash,
+and pay what is missed. Adding a stop keeps the meter running at the driver's rates. All charges are shown in your local currency and paid in sats. A **mint** holds the money behind ecash,
 so use one you trust. Full rules: `docs/index.md`, section *Pay as you ride*.
 
 **Wallets:** *Account → Ecash wallet* holds the ecash you ride with. *Account → Lightning Wallet*: paste a **real**
@@ -98,7 +97,7 @@ still pay any invoice from another wallet.
 **Lost phone?** Your ecash is saved on the device. *Account → Recovery phrase* shows 12 words to write on paper (and asks you to type
 three back). With them, a new phone finds your ecash again at the mint (*Restore ecash from 12 words*); the money then sits under that phone's own new words, which you write down too. Keep the paper secret: whoever has the words can take the ecash.
 To take the wallet off a phone you are about to lose or sell, use *Account → Ecash wallet → Disconnect ecash from this device* (the coins are swapped and the wallet and its words are erased there; the money comes back with your 12 words).
-Every part of the Account screen opens and closes when you tap its title.
+Every part of the Account screen opens and closes when you tap its title. *Account → Appearance → Dark mode* switches to a dark look at once (saved on the device). The password box on the sign-in page has an eye button to show what you typed.
 
 ---
 
@@ -132,7 +131,7 @@ Every part of the Account screen opens and closes when you tap its title.
 
 | I want to change... | Open this file |
 |---|---|
-| Suggested-price formula, flat-price limits, request timers, demo data | `src/config/settings.js` |
+| Suggested-price formula, request timers, demo data | `src/config/settings.js` |
 | The ecash mint a new driver starts with | `VITE_DEFAULT_MINT` in `.env` (see `env.example`) |
 | Currencies, tick and finish rules | `src/lib/currency.js`, `src/lib/ticks.js`, `src/lib/finish.js` |
 | Default relay list | `src/config/relays.js` |

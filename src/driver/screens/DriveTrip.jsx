@@ -22,7 +22,6 @@ import { startCode } from "../../lib/startcode.js";
 import { canMarkArrived } from "../../lib/arrival.js";
 import { fullTrip, nextStop, stopChanges, readStop } from "../../lib/stops.js";
 import { MISSED_LIMIT } from "../../lib/ticks.js";
-import { rideTerms } from "../../lib/terms.js";
 import { useRideLink } from "../../features/payments/useRideLink.js";
 import { getSetting, setSetting } from "../../config/relays.js";
 import { moneyText } from "../../ui/Money.jsx";
@@ -94,7 +93,6 @@ export default function DriveTrip({ request }) {
   const eta = miles == null ? null : routeInfo && !routeInfo.straight ? routeInfo.minutes : pickupEta(miles);
   const offer = offerFrom(request, user.publicKey); // the offer this driver made (its rates are frozen for the ride)
   const fare = offer ? parse(offer)?.priceSats : parse(request)?.fareSats;
-  const flatOffer = parse(offer || { content: "{}" })?.mode === "flat" && rideTerms(request)?.mode === "flat";
   // The line always starts at the car, so it shows what is LEFT of the trip (through the stops still ahead).
   const ahead = [...stops.slice(passed), dropoff];
   const route = myPosition ? [{ lat: r3(myPosition.lat), lng: r3(myPosition.lng) }, ...(stage === "riding" ? ahead : [pickup])] : stage === "riding" ? [pickup, ...stops, dropoff] : null;
@@ -212,7 +210,7 @@ export default function DriveTrip({ request }) {
             </div>
             <FareBreakdown ledger={driveMoney?.ledger} paidSats={driveMoney?.paid || 0} className="mt-3 pt-3 border-t border-neutral-200" />
             <p className="text-xs text-neutral-500 mt-2">
-              {flatOffer ? "Flat price: it does not grow with traffic or detours. " : ""}Your rates are frozen for this ride. Payments arrive in your ecash wallet as the ride runs.
+              Your rates are frozen for this ride. Payments arrive in your ecash wallet as the ride runs.
             </p>
           </div>
         )}
@@ -266,10 +264,7 @@ export default function DriveTrip({ request }) {
             <p className="font-bold">{pendingStop.mode === "destination" ? "The rider asks for a new destination" : "The rider asks to add a stop"}</p>
             <p className="text-[15px] mt-1 font-semibold">{stopPlace?.name || "The place can't be read yet."}</p>
             <p className="text-xs text-neutral-600 mt-2">
-              {flatOffer
-                ? "If you accept, the flat price becomes your normal fare (base rate plus each mile and minute), counted from the start of the ride. The rider has been told."
-                : "If you accept, the rider keeps paying your normal fare for the extra distance and time."}
-              {" "}You can also finish the ride instead.
+              If you accept, the rider keeps paying your normal fare for the extra distance and time. You can also finish the ride instead.
             </p>
             <div className="flex gap-2 mt-3">
               <Button size="md" variant="go" disabled={!stopPlace} onClick={() => answerStop(request, pendingStop.id, true)}>Accept</Button>
@@ -310,7 +305,7 @@ export default function DriveTrip({ request }) {
           {fare > 0 && (
             <div className="text-right">
               <Money sats={fare} stacked className="font-bold" />
-              <p className="text-xs text-neutral-500">{flatOffer ? "flat price" : "estimate"}</p>
+              <p className="text-xs text-neutral-500">estimate</p>
             </div>
           )}
         </div>
@@ -346,7 +341,7 @@ export default function DriveTrip({ request }) {
         open={ask === "finish"}
         title="Finish this ride?"
         message={riding
-          ? `${atEnd ? "" : "You are not at the destination. "}The rider pays what the ride has earned so far: the base rate, the miles and the minutes${driveMoney ? ` (${moneyText(driveMoney.owed, btcPrice)})` : ""}. ${flatOffer && atEnd ? "At the destination the whole flat price is owed. " : ""}The ride ends for both of you.`
+          ? `${atEnd ? "" : "You are not at the destination. "}The rider pays what the ride has earned so far: the base rate, the miles and the minutes${driveMoney ? ` (${moneyText(driveMoney.owed, btcPrice)})` : ""}. The ride ends for both of you.`
           : "The ride has not started, so the rider owes nothing. The ride ends for both of you."}
         confirmLabel="Finish ride"
         cancelLabel="Keep driving"

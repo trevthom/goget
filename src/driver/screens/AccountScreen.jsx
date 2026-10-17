@@ -15,6 +15,7 @@ import VehicleSection from "../../features/profile/VehicleSection.jsx";
 import TypicalFareSection from "../../features/profile/TypicalFareSection.jsx";
 import { driveGaps, gapsText } from "../../lib/profile.js";
 import LightningAddressSection from "../../features/profile/LightningAddressSection.jsx";
+import AppearanceSection from "../../features/profile/AppearanceSection.jsx";
 import WalletSection from "../../features/profile/WalletSection.jsx";
 import VouchesSection from "../../features/profile/VouchesSection.jsx";
 import EcashSection from "../../features/ecash/EcashSection.jsx";
@@ -56,9 +57,10 @@ export default function AccountScreen() {
               gapsFor={(vehicle) => driveGaps({ ...user, vehicle })}
             />
           </Fold>
-          <Fold id="lightning-address" title="Lightning address" defaultOpen={!user.lud16} status={user.lud16 ? { text: "Set", tone: "ok" } : { text: "Needed", tone: "warn" }}>
+          <Fold id="lightning-address" title="Cash out location" defaultOpen={!user.lud16} status={user.lud16 ? { text: "Set", tone: "ok" } : { text: "Needed", tone: "warn" }}>
             <LightningAddressSection value={user.lud16 || ""} onSave={(lud16) => save({ lud16 })} />
           </Fold>
+          <Fold id="appearance" title="Appearance"><AppearanceSection /></Fold>
           <Fold id="currency" title="Currency"><CurrencySection /></Fold>
           <Fold id="rates" title="Your rates"><TypicalFareSection rates={user.rates} onSave={(rates) => save({ rates })} locked={onRide} /></Fold>
           <Fold id="ecash" title="Ecash wallet"><EcashSection locked={onRide} /></Fold>

@@ -2,7 +2,6 @@ import { boot, sleep, PICKUP, DEST, metersNorth } from "./harness.mjs";
 import { pinPickup, openFold } from "./flow.mjs";
 import { tmpdir } from "node:os";
 const SC = tmpdir(); // failure screenshots go here
-const FLAT = process.env.FLAT === "1";
 const SHARE_CHECK = process.env.SHARE_CHECK === "1"; // the rider shares the trip; the shared position must be the RIDER's phone, every ~6 s
 const h = await boot({ feePpk: 100 });
 let D, R, dctx, rctx;
@@ -50,7 +49,7 @@ try {
     if (!/5,000 sats/.test(bal)) throw new Error("expected 5,000 sats in the ecash wallet: " + bal);
   });
 
-  await step("rider plans a trip and requests (" + (FLAT ? "flat price" : "standard fare") + ")", async () => {
+  await step("rider plans a trip and requests (standard fare)", async () => {
     await R.locator('nav[aria-label="Main"]').getByText("Ride", { exact: true }).click();
     await R.getByRole("button", { name: /Where to\?/ }).click();
     await R.getByLabel("Where to?").waitFor();
@@ -58,22 +57,20 @@ try {
     await pinPickup(R);
     await R.getByLabel("Where to?").fill("Blue Grass");
     await R.getByText("Blue Grass Airport", { exact: false }).first().click({ timeout: 10000 });
-    await R.getByText("Standard fare", { exact: true }).waitFor({ timeout: 15000 });
-    if (FLAT) await R.getByRole("button", { name: "Flat price" }).click();
     await R.getByRole("button", { name: /Request ride · / }).click({ timeout: 15000 });
     await R.getByText(/Finding your driver/).first().waitFor({ timeout: 15000 });
   });
 
   await step("driver gets the request and accepts", async () => {
     await D.getByText("New ride request").waitFor({ timeout: 40000 });
-    log("     driver card:", (await D.getByText(/Your standard fare|Rider's flat price/).first().innerText()));
+    log("     driver card:", (await D.getByText(/Your standard fare/).first().innerText()));
     await D.getByRole("button", { name: /^Accept/ }).click();
     await D.getByText(/Waiting for/).first().waitFor({ timeout: 15000 });
   });
 
   await step("rider chooses the driver and confirms (funds are enough)", async () => {
     await R.getByText(/can take you/).waitFor({ timeout: 40000 });
-    const terms = await R.getByText(/Standard fare|Flat price/).first().innerText();
+    const terms = await R.getByText(/Standard fare/).first().innerText();
     log("     terms shown:", terms.replace(/\s+/g, " ").slice(0, 120));
     await R.getByRole("button", { name: "Choose" }).click();
     await R.getByText("Confirm your driver").first().waitFor();
@@ -146,6 +143,9 @@ try {
     // A wrong code is refused.
     const wrong = String((Number(startCode) + 1) % 10000).padStart(4, "0");
     await R.locator("#start-code").fill(wrong);
+    // All four digits must be visible in the field (a squeezed field once showed only two).
+    const room = await R.locator("#start-code").evaluate((el) => ({ box: el.getBoundingClientRect().width, need: el.scrollWidth, have: el.clientWidth }));
+    if (room.need > room.have || room.box < 120) throw new Error(`the start code field is too narrow: ${JSON.stringify(room)}`);
     await R.getByRole("button", { name: "Confirm", exact: true }).click();
     await R.getByText(/not the 4-digit code on your driver/).waitFor({ timeout: 5000 });
     if (!(await start.isDisabled())) throw new Error("a wrong code must not unlock Start trip");

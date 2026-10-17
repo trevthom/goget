@@ -29,7 +29,7 @@ export function makeLog() {
   return (...a) => console.log(`[${String(Math.round((Date.now() - t0) / 1000)).padStart(3)}s]`, ...a);
 }
 
-// opts: { flatPrice: "7" (local currency) | undefined, fundAmount: "11" | undefined, log, step }
+// opts: { fundAmount: "11" | undefined, log, step }
 export async function rideToRiding(h, opts = {}) {
   const log = opts.log || makeLog();
   const pages = {};
@@ -60,11 +60,6 @@ export async function rideToRiding(h, opts = {}) {
     await pinPickup(R);
     await R.getByLabel("Where to?").fill("Blue Grass");
     await R.getByText("Blue Grass Airport", { exact: false }).first().click({ timeout: 10000 });
-    await R.getByText("Standard fare", { exact: true }).waitFor({ timeout: 15000 });
-    if (opts.flatPrice) {
-      await R.getByRole("button", { name: "Flat price" }).click();
-      await R.getByLabel("Your flat price").fill(opts.flatPrice);
-    }
     await R.getByRole("button", { name: /Request ride · / }).click({ timeout: 15000 });
     await D.getByText("New ride request").waitFor({ timeout: 40000 });
     await D.getByRole("button", { name: /^Accept/ }).click();
