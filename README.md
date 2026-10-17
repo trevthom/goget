@@ -81,7 +81,7 @@ that password. Use a different account in each app window to play both sides.
 
 **Both apps:**
 7. The driver's phone shows a 4-digit code. The rider types it on the rider's phone. Then the driver taps **Start trip**.
-8. **The rider pays as the ride runs**: the base rate at the start, then every mile and every minute. Both screens show the fare so far.
+8. **The rider pays as the ride runs**: the base rate at the start, then every mile and every minute. Both screens show the fare so far, what is paid, and an *estimated total* (dashed, "≈"). The rider's screen also shows the **ecash balance** live (red at $5.00 or less) and the trip clock counts seconds. **Add stop / update fare** shows the estimated change in the fare before the rider asks; the driver sees it too.
 9. Either person taps **Finish ride** (and confirms). The rider pays what the ride earned. The driver may waive part of the fare. The trip shows up under *Earnings* (driver) and *Activity* (rider).
 
 **Money:** payments are tiny ecash payments from the rider's wallet to the driver, made while the ride

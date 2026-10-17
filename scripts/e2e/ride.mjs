@@ -186,7 +186,7 @@ try {
     const dPaid = await satsIn(D.getByText("Paid by the rider").locator(".."));
     log(`     rider: fare ${rFare} paid ${rPaid} | driver: fare ${dFare} paid ${dPaid}`);
     log("     rider meter:", (await R.getByText(/mi\b/).first().innerText().catch(() => "")).replace(/\s+/g, " ").slice(0, 80));
-    if (rFare <= 2300) throw new Error("a minute (and a mile) should be on the fare by now: " + rFare);
+    if (rFare <= 1800) throw new Error("a minute (and a mile) should be on the fare by now: " + rFare);
     if (dPaid < rPaid - 500) throw new Error("the driver should have confirmed almost all payments");
     // The four "Paid so far" lines on both screens: the base, the miles and the minutes paid until now.
     const lines = async (P) => (await P.getByRole("group", { name: "Paid so far" }).innerText()).replace(/\s+/g, " ").trim();
@@ -194,7 +194,48 @@ try {
     log("     rider lines:", rLines);
     log("     driver lines:", dLines);
     for (const t of [rLines, dLines]) {
-      if (!/^Paid so far: Base rate: \$2\.00 Miles: [1-9]\d* \(\$\d+\.\d\d\) Minutes: [1-9]\d* \(\$\d+\.\d\d\)$/.test(t)) throw new Error("the Paid so far lines are wrong: " + t);
+      if (!/^Paid so far: Base rate: \$1\.50 Miles: [1-9]\d* \(\$\d+\.\d\d\) Minutes: [1-9]\d* \(\$\d+\.\d\d\)$/.test(t)) throw new Error("the Paid so far lines are wrong: " + t);
+    }
+  });
+
+  await step("the trip card: live ecash balance (red at $5 or less), the estimate below Paid, the trip clock with seconds", async () => {
+    // 1. The rider's ecash balance sits above "Fare so far", is live, and is red at $5.00 or less (this wallet started with $5.00).
+    const bal = R.getByRole("status", { name: "Your ecash balance" });
+    await bal.waitFor({ timeout: 10000 });
+    const balText = (await bal.innerText()).replace(/\s+/g, " ");
+    const balSats = await satsIn(bal);
+    log("     rider balance row:", balText);
+    const yBal = (await bal.boundingBox()).y, yFare = (await R.getByText("Fare so far").boundingBox()).y;
+    if (!(yBal < yFare)) throw new Error("the balance must be above Fare so far");
+    const color = await bal.getByText("Your ecash").evaluate((el) => getComputedStyle(el).color);
+    if (color !== "rgb(220, 38, 38)") throw new Error("a balance of $5 or less must be red: " + color + " (" + balText + ")");
+    if (!(balSats > 0 && balSats < 5000)) throw new Error("the balance should have dropped below the $5.00 it started with after the ticks: " + balSats);
+    const before = balSats;
+    await sleep(65000); // a minute tick falls due: the balance moves by itself
+    const after = await satsIn(R.getByRole("status", { name: "Your ecash balance" }));
+    if (!(after < before)) throw new Error(`the balance did not move on its own: ${before} -> ${after}`);
+    log(`     the balance moved live: ${before} -> ${after} sats`);
+    // 2. The estimate is a dashed "≈" row BELOW Paid on both screens, and the old one at the bottom of the sheet is gone.
+    for (const [who, P, paidLabel] of [["rider", R, "Paid"], ["driver", D, "Paid by the rider"]]) {
+      const est = P.getByRole("group", { name: "Estimated total fare" });
+      await est.waitFor({ timeout: 10000 });
+      const t = (await est.innerText()).replace(/\s+/g, " ");
+      if (!/Estimated total ≈\s*\$\d/.test(t)) throw new Error(`${who}: the estimate must read "Estimated total ≈ $…": ` + t);
+      const paidY = (await P.getByText(paidLabel, { exact: true }).boundingBox()).y, estY = (await est.boundingBox()).y;
+      if (!(estY > paidY)) throw new Error(`${who}: the estimate must be below ${paidLabel}`);
+      if (!/dashed/.test(await est.evaluate((el) => getComputedStyle(el).borderTopStyle))) throw new Error(`${who}: the estimate must have a dashed outline`);
+      if (await P.getByText("estimate", { exact: true }).count()) throw new Error(`${who}: the old "estimate" at the bottom of the sheet must be gone`);
+      log(`     ${who} estimate:`, t);
+    }
+    // 3. "Trip so far" counts the seconds, on both screens, and moves.
+    for (const [who, P] of [["rider", R], ["driver", D]]) {
+      const read = async () => (await P.getByRole("group", { name: "Trip meter" }).innerText()).replace(/\s+/g, " ");
+      const t1 = await read();
+      if (!/Trip so far [\d.]+ mi · (\d+ h \d\d min \d\d s|\d+ min \d\d s|\d+ s)/.test(t1)) throw new Error(`${who}: "Trip so far" must show seconds: ` + t1);
+      await sleep(2500);
+      const t2 = await read();
+      if (t1 === t2) throw new Error(`${who}: the trip clock did not move: ` + t2);
+      log(`     ${who} trip clock:`, t1, "->", t2);
     }
   });
 

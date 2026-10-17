@@ -32,6 +32,8 @@ import { exactTrip } from "../../lib/privacy.js";
 import { acceptFor, offerFrom } from "../../lib/trips.js";
 import { haversineDistance } from "../../lib/geo.js";
 import { pickupEta } from "../../lib/fare.js";
+import { rideTerms } from "../../lib/terms.js";
+import { EstimatedTotal, ChangeEstimate } from "../../ui/FareEstimate.jsx";
 import MapView from "../../ui/MapView.jsx";
 import Money from "../../ui/Money.jsx";
 import Button from "../../ui/Button.jsx";
@@ -141,6 +143,9 @@ export default function DriveTrip({ request }) {
   });
   const pendingStop = stopChanges(request).filter((c) => c.status === "pending").pop();
   const stopPlace = pendingStop ? readStop(pendingStop, request, user) : null;
+  const terms = rideTerms(request); // this driver's frozen rates, for the estimates
+  const acceptedStops = stopChanges(request).filter((c) => c.status === "accepted");
+  const changeKinds = [...new Set(acceptedStops.map((c) => c.mode))];
   const atEnd = !!exact && riding && haversineDistance(myPosition?.lat ?? 0, myPosition?.lng ?? 0, dropoff.lat, dropoff.lng) * 1609.344 <= ARRIVE_RADIUS_METERS && !stops.slice(passed).length;
 
   const title =
@@ -208,6 +213,7 @@ export default function DriveTrip({ request }) {
               <span className="text-neutral-600">Paid by the rider</span>
               <Money sats={driveMoney?.paid || 0} className="font-semibold" />
             </div>
+            {fare > 0 && <EstimatedTotal className="mt-2" baseSats={fare} trip={full} changed={acceptedStops.length > 0} changeKinds={changeKinds} terms={terms} />}
             <FareBreakdown ledger={driveMoney?.ledger} paidSats={driveMoney?.paid || 0} className="mt-3 pt-3 border-t border-neutral-200" />
             <p className="text-xs text-neutral-500 mt-2">
               Your rates are frozen for this ride. Payments arrive in your ecash wallet as the ride runs.
@@ -263,6 +269,7 @@ export default function DriveTrip({ request }) {
           <div className="mt-3 rounded-2xl border-2 border-black p-4" role="group" aria-label="Stop request">
             <p className="font-bold">{pendingStop.mode === "destination" ? "The rider asks for a new destination" : "The rider asks to add a stop"}</p>
             <p className="text-[15px] mt-1 font-semibold">{stopPlace?.name || "The place can't be read yet."}</p>
+            <ChangeEstimate className="mt-3" from={myPosition} ahead={ahead} mode={pendingStop.mode} place={stopPlace} terms={terms} />
             <p className="text-xs text-neutral-600 mt-2">
               If you accept, the rider keeps paying your normal fare for the extra distance and time. You can also finish the ride instead.
             </p>
@@ -302,7 +309,7 @@ export default function DriveTrip({ request }) {
             <p className="text-[15px] truncate">{pickup.name}</p>
             <p className="text-[15px] truncate">{dropoff.name}</p>
           </div>
-          {fare > 0 && (
+          {fare > 0 && !riding && (
             <div className="text-right">
               <Money sats={fare} stacked className="font-bold" />
               <p className="text-xs text-neutral-500">estimate</p>
