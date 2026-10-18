@@ -1,6 +1,7 @@
 // ════════════════════════════════════════════════════════════
 //  SHIPPER APP — GoGet's Shipping context. Four tabs: Ship (post a delivery) · Bids (a number shows when couriers have bid) ·
 //  Deliveries (running, open and finished) · Account. Mounted by src/goget/App.jsx after the person picks "Shipping".
+//  The first time, a one-time notice (lib/notices.js) says: you are responsible for what you send; illegal or dangerous goods are still illegal.
 // ════════════════════════════════════════════════════════════
 
 import { useApp } from "../state/AppContext.jsx";
@@ -10,6 +11,7 @@ import ErrorBoundary from "../ui/ErrorBoundary.jsx";
 import UserModal from "../ui/UserModal.jsx";
 import NoticeBanner from "../ui/NoticeBanner.jsx";
 import ConnectionBanner from "../ui/ConnectionBanner.jsx";
+import NoticeDialog from "../ui/NoticeDialog.jsx";
 import ShipScreen from "./screens/ShipScreen.jsx";
 import BidsScreen from "./screens/BidsScreen.jsx";
 import DeliveriesScreen from "./screens/DeliveriesScreen.jsx";
@@ -38,6 +40,7 @@ function Shell() {
       <UserModal />
       <ConnectionBanner />
       <NoticeBanner />
+      <NoticeDialog id="shipping" />
     </AppFrame>
   );
 }

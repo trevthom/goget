@@ -5,6 +5,7 @@
 //   • two couriers bid (a price, minutes, notes, the CDL on the bid); the shipper's Bids tab shows a number and both bids
 //   • accepting one bid declines the other; the shipper types the 4-digit code from the courier's phone; the pickup share is paid
 //   • the courier marks it delivered near the drop-off (with a photo); the shipper confirms; the rest is paid; earnings show it
+//   • the first time in Shipping a notice says what you send is your responsibility; it never comes back
 //   • each person switches context in Account (Passenger and Taxi Driver are the NostrRide rider and driver screens)
 // Takes about two minutes.
 import { boot, sleep, PICKUP, DEST, metersNorth } from "./harness.mjs";
@@ -77,6 +78,9 @@ try {
     await A.getByText("You go. We get.").first().waitFor({ timeout: 60000 });
     for (const t of ["Taxi Driver", "Courier", "Passenger", "Shipping"]) await A.getByRole("button", { name: t }).waitFor({ timeout: 5000 });
     await A.getByRole("button", { name: "Shipping" }).click();
+    // the one-time notice: you are responsible for what you send
+    await A.getByTestId("notice-shipping").getByText(/illegal or dangerous goods are still illegal/i).waitFor({ timeout: 10000 });
+    await A.getByRole("button", { name: "I understand" }).click();
     for (const t of ["Ship", "Bids", "Deliveries", "Account"]) await tabs(A).getByText(t, { exact: true }).waitFor({ timeout: 10000 });
     await fund(A);
   });
@@ -233,6 +237,7 @@ try {
     await A.reload();
     await h.login(A, alice, h.gogetUrl);
     await tabs(A).getByText("Deliveries", { exact: true }).waitFor({ timeout: 60000 });
+    if (await A.getByTestId("notice-shipping").count()) throw new Error("the shipping notice must show only once");
   });
 
   const unstyled = await h.missingStyles(A, "goget");

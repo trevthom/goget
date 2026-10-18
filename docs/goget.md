@@ -73,6 +73,8 @@ The full description is in [`index.md`](index.md).
 
 ## 5. Shipping (send something)
 
+The first time you open Shipping, GoGet shows a one-time notice: **you are responsible for what you send, and illegal or dangerous goods are still illegal.** Tap *I understand* to go on. It does not come back (not even on another device that has your backup).
+
 ### Post a delivery (Ship tab)
 1. **What are you sending?** Document, Package, Large equipment, or Something else.
 2. **How big is it?** Small (fits in a bag), Medium (a box), Large (needs a van or truck), Oversize / heavy (needs a flatbed, trailer or equipment).
