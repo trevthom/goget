@@ -23,8 +23,8 @@ function Shell() {
   const { open, jobs } = useCourier();
   const Screen = SCREENS[view] || JobsScreen;
   const tabs = [
-    { id: "jobs", label: "Jobs", icon: "package", badge: view !== "jobs" ? open.length : 0 },
-    { id: "mine", label: "My jobs", icon: "truck", badge: jobs.length },
+    { id: "jobs", label: "Jobs", icon: "route", badge: view !== "jobs" ? open.length : 0 },
+    { id: "mine", label: "My jobs", icon: "courier", badge: jobs.length },
     { id: "earnings", label: "Earnings", icon: "chart" },
     { id: "account", label: "Account", icon: "user" },
   ];

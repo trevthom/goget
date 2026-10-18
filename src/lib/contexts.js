@@ -12,10 +12,10 @@ import { useSyncExternalStore } from "react";
 import { getSetting, setSetting } from "../config/relays.js";
 
 export const CONTEXTS = [
-  { id: "driver", title: "Taxi Driver", blurb: "Take riders where they are going and get paid in ecash.", icon: "car", first: "drive", views: ["drive", "earnings", "account"] },
-  { id: "courier", title: "Courier", blurb: "Pick up and carry parcels. Bid on deliveries near you.", icon: "package", first: "jobs", views: ["jobs", "mine", "earnings", "account"] },
-  { id: "rider", title: "Passenger", blurb: "Get a ride. Pay the driver as the ride runs.", icon: "user", first: "home", views: ["home", "activity", "account"] },
-  { id: "shipper", title: "Shipping", blurb: "Send a document, a package or heavy equipment. Pick a courier's bid.", icon: "send", first: "ship", views: ["ship", "bids", "deliveries", "account"] },
+  { id: "driver", title: "Taxi Driver", blurb: "Take riders where they are going and get paid in ecash.", icon: "taxi", first: "drive", views: ["drive", "earnings", "account"] },
+  { id: "courier", title: "Courier", blurb: "Pick up and carry parcels. Bid on deliveries near you.", icon: "courier", first: "jobs", views: ["jobs", "mine", "earnings", "account"] },
+  { id: "rider", title: "Passenger", blurb: "Get a ride. Pay the driver as the ride runs.", icon: "passenger", first: "home", views: ["home", "activity", "account"] },
+  { id: "shipper", title: "Shipping", blurb: "Send a document, a package or heavy equipment. Pick a courier's bid.", icon: "ship", first: "ship", views: ["ship", "bids", "deliveries", "account"] },
 ];
 export const contextById = (id) => CONTEXTS.find((c) => c.id === id) || null;
 export const isContext = (id) => !!contextById(id);

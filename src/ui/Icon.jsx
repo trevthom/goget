@@ -47,6 +47,17 @@ const PATHS = {
   send: <><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></>,
   inbox: <><polyline points="22 12 16 12 14 15 10 15 8 12 2 12" /><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" /></>,
   repeat: <><polyline points="17 1 21 5 17 9" /><path d="M3 11V9a4 4 0 0 1 4-4h14" /><polyline points="7 23 3 19 7 15" /><path d="M21 13v2a4 4 0 0 1-4 4H3" /></>,
+  // GoGet: icons for its four roles and for what happens in a delivery (all drawn here, no image files).
+  taxi: <><path d="M3 14l2-6a2 2 0 0 1 1.9-1.4h10.2A2 2 0 0 1 19 8l2 6" /><rect x="3" y="14" width="18" height="5" rx="1.5" /><circle cx="7.5" cy="19" r="1.5" /><circle cx="16.5" cy="19" r="1.5" /><rect x="9.5" y="2.5" width="5" height="3" rx="0.8" /></>,
+  passenger: <><circle cx="9" cy="5" r="2.5" /><path d="M9 8v6" /><path d="M9 11l-4 3" /><path d="M9 11l4-5 3 1" /><path d="M9 14l-3 7" /><path d="M9 14l4 7" /></>,
+  courier: <><path d="M2 8h4" /><path d="M1 12h5" /><path d="M2 16h4" /><path d="M10 6.5l5-2.5 5 2.5v7l-5 2.5-5-2.5z" /><path d="M10 6.5l5 2.5 5-2.5" /><path d="M15 9v7" /></>,
+  ship: <><path d="M3 11v8a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-4" /><path d="M3 11l3-5h5" /><path d="M3 11h8" /><path d="M14 10l7-7" /><path d="M15 3h6v6" /></>,
+  bid: <><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" /><line x1="7" y1="7" x2="7.01" y2="7" /></>,
+  proof: <><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><polyline points="8.5 12 11 14.5 15.5 9.5" /></>,
+  route: <><circle cx="6" cy="19" r="3" /><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15" /><circle cx="18" cy="5" r="3" /></>,
+  lock: <><rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></>,
+  license: <><rect x="2" y="5" width="20" height="14" rx="2" /><circle cx="8.5" cy="11" r="2" /><path d="M5.5 16c.5-1.6 1.6-2.5 3-2.5s2.5.9 3 2.5" /><line x1="14" y1="10" x2="19" y2="10" /><line x1="14" y1="14" x2="18" y2="14" /></>,
+  odometer: <><path d="M4.9 19a10 10 0 1 1 14.2 0" /><path d="M12 14l4-5" /><circle cx="12" cy="14" r="1" /></>,
   bell: <><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></>,
 };
 

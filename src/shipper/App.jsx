@@ -22,8 +22,8 @@ function Shell() {
   const { bidCount, draft, setDraft } = useShipper();
   const Screen = SCREENS[view] || ShipScreen;
   const tabs = [
-    { id: "ship", label: "Ship", icon: "send" },
-    { id: "bids", label: "Bids", icon: "inbox", badge: bidCount },
+    { id: "ship", label: "Ship", icon: "ship" },
+    { id: "bids", label: "Bids", icon: "bid", badge: bidCount },
     { id: "deliveries", label: "Deliveries", icon: "package" },
     { id: "account", label: "Account", icon: "user" },
   ];
