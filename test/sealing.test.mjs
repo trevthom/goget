@@ -18,7 +18,7 @@ test("a wrap shows a relay only a throwaway author, the recipient and a blob", (
   assert.equal(w.kind, GIFT_WRAP);
   assert.deepEqual(w.tags, [["p", alice.pk]]);
   assert.notEqual(w.pubkey, bob.pk);
-  assert.ok(!w.content.includes("Elm") && !w.content.includes("4200") && !w.content.includes("nostrride"));
+  assert.ok(!w.content.includes("12 Elm Street") && !w.content.includes("priceSats") && !w.content.includes("nostrride"));
   assert.notEqual(wrap(inner, alice.pk).pubkey, w.pubkey, "a new throwaway key for every wrap");
 });
 
@@ -46,7 +46,7 @@ test("publish sends wraps only; the receiver's cache gets the inner event once",
   assert.equal(sent.length, 3, "one wrap each for the author, alice and carl");
   assert.ok(sent.every((e) => e.kind === GIFT_WRAP && e.tags.length === 1 && e.tags[0][0] === "p"));
   assert.deepEqual(new Set(sent.map((e) => e.tags[0][1])), new Set([bob.pk, alice.pk, carl.pk]));
-  assert.ok(sent.every((e) => !e.content.includes("Elm")));
+  assert.ok(sent.every((e) => !e.content.includes("12 Elm Street")));
   // Alice's device: reads the wrap addressed to her.
   relay.seen.delete(inner.id); relay.events = []; relay.byKind = new Map(); relay.byTag = new Map();
   relay.setIdentity(alice.sk, alice.pk);

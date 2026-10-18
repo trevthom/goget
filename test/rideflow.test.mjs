@@ -39,6 +39,7 @@ function newRide(name, mode, extra = {}) {
   signAs(rider, K.RIDE_ACCEPT, { offerId: offer.id, requestId: req.id }, [["e", offer.id], ["e", req.id], ["p", driver.publicKey], ["d", "accept-" + req.id]], T0 - 3 * MIN);
   const live = signAs(rider, K.RIDE_REQUEST, { ...trip, status: "in_progress", driverPubkey: driver.publicKey }, [["d", d], ["p", driver.publicKey]], T0 - 2 * MIN);
   signAs(driver, K.RIDE_STAGE, { stage: "arrived", at: T0 - MIN }, [["e", live.id], ["p", rider.publicKey], ["d", "stage-" + d]], T0 - MIN);
+  signAs(rider, K.RIDE_CONFIRM, { phase: "code", ok: true }, [["e", live.id], ["p", driver.publicKey], ["d", "confirm-" + d + "-code"]], T0 - 30000);
   signAs(driver, K.RIDE_STAGE, { stage: "riding", at: T0, arrivedAt: T0 - MIN }, [["e", live.id], ["p", rider.publicKey], ["d", "stage-" + d]], T0);
   return live;
 }

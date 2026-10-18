@@ -39,7 +39,7 @@ import { getMyMint } from "../../features/ecash/myMint.js";
 import { isDriveReady } from "../../lib/profile.js";
 import { seal } from "../../lib/privacy.js";
 import { PICKUP_CHANGE_NOTE } from "../../lib/pickup.js";
-import { activeDriveFor, pendingOfferFor, declinedDrivers } from "../../lib/trips.js";
+import { activeDriveFor, consentedDrive, pendingOfferFor, declinedDrivers } from "../../lib/trips.js";
 import { hideList, hidesMe } from "../../lib/blocks.js";
 import { isRideExpired, rideEnding, rideKey, rideStatus, rideTimes, rideVersions } from "../../lib/rides.js";
 import { DEFAULT_REQUEST_RADIUS_MILES, LOCATION_PING_MS } from "../../config/settings.js";
@@ -214,7 +214,7 @@ export function DriverProvider({ children }) {
   const [doneKeys, setDoneKeys] = useState(() => getSetting("driverDone", []));
   const receipt =
     rideRequests
-      .filter((r) => parse(r)?.driverPubkey === me && !doneKeys.includes(rideKey(r)))
+      .filter((r) => parse(r)?.driverPubkey === me && !doneKeys.includes(rideKey(r)) && consentedDrive(r, me))
       .map((r) => ({ r, end: rideEnding(r) }))
       .filter(({ r, end }) => {
         if (!end || Date.now() - end.at * 1000 > 6 * HOUR) return false;
