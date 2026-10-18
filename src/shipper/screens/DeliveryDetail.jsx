@@ -17,7 +17,7 @@ import { relay } from "../../nostr/relay.js";
 import { getProfile } from "../../nostr/profiles.js";
 import { shortNpub } from "../../nostr/keys.js";
 import { subscribeRideLocation } from "../../nostr/live.js";
-import { acceptedBid, deliveryContent, deliveryCourier, deliveryProof, deliveryVerified, deliveryNeed, pendingBids, placesOf, typeLabel, sizeLabel } from "../../lib/delivery.js";
+import { acceptedBid, deliveryContent, deliveryCourier, deliveryInvited, deliveryProof, deliveryVerified, deliveryNeed, pendingBids, placesOf, typeLabel, sizeLabel } from "../../lib/delivery.js";
 import { moneyOf, dueNow, splitSats } from "../../lib/deliveryPay.js";
 import { needText } from "../../lib/cdl.js";
 import { attemptGate, CODE_DIGITS } from "../../lib/startcode.js";
@@ -138,7 +138,9 @@ export default function DeliveryDetail({ request, onBack }) {
           <div className="mt-4 space-y-2">
             {bids > 0 && <Button onClick={() => setView("bids")}>See the {bids} bid{bids === 1 ? "" : "s"}</Button>}
             <Button variant="outline" onClick={() => closeRequest(request)}>Close this request</Button>
-            <p className="text-xs text-neutral-500">Couriers near you can see it and bid. Nothing is charged until you accept a bid and hand over the parcel.</p>
+            <p className="text-xs text-neutral-500" data-testid="invited-note">
+              <Icon name="lock" size={12} className="inline -mt-0.5" /> Encrypted. {deliveryInvited(request).size ? `Sent to ${deliveryInvited(request).size} courier${deliveryInvited(request).size === 1 ? "" : "s"} who ${deliveryInvited(request).size === 1 ? "was" : "were"} online near the pickup.` : "No courier is online near the pickup yet."} More are invited as they come online, so keep GoGet open. Nothing is charged until you accept a bid and hand over the parcel.
+            </p>
           </div>
         )}
         {status === "expired" && <div className="mt-4"><Button onClick={repost}>Post it again</Button></div>}

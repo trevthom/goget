@@ -14,6 +14,7 @@ const { EVENT_KINDS: K } = await import(`${R}/nostr/eventKinds.js`);
 
 const MINT = "https://mint.test";
 const user = (kp) => ({ sk: kp.sk, publicKey: kp.publicKey });
+const as = (kp) => D.setDeliveryViewer(kp ? user(kp) : null); // whose eyes: every sealed read opens with the logged-in person's key
 const ship = generateKeypair(), c1 = generateKeypair(), c2 = generateKeypair(), c3 = generateKeypair(), stranger = generateKeypair();
 // Sign a built event ({kind, content, tags}) as `who` and put it in the cache, as a relay would deliver it.
 let clock = Math.floor(Date.now() / 1000) - 1000;
@@ -44,14 +45,29 @@ assert.equal(C.cdlText({ has: true, endorsements: ["T", "H"] }), "CDL · H, T");
 assert.equal(C.cdlText({ has: false }), "");
 assert.equal(C.needText({ endorsements: ["H"] }), "CDL required · H");
 
-// ── A request: coarse places in public, exact places sealed ──
-const reqEv = pub(D.requestEvent(user(ship), form({ cdl: { required: true, endorsements: ["T"] } })), ship);
-const content = JSON.parse(reqEv.content);
-assert.equal(content.pickup.approx, true, "the public pickup is coarse");
-assert.ok(!reqEv.content.includes("12 Dock St") && !reqEv.content.includes("Ask for Sam"), "the exact place and the contact are not public");
+// ── A request: nothing readable on a relay; the invited couriers read the job; the exact places stay with the shipper ──
+as(ship);
+const reqEv = pub(D.requestEvent(user(ship), form({ cdl: { required: true, endorsements: ["T"] } }), [c1.publicKey, c2.publicKey, c3.publicKey]), ship);
+{
+  const wire = JSON.parse(reqEv.content);
+  assert.deepEqual(Object.keys(wire).sort(), ["box", "sealed", "status", "v", "wraps"], "a relay sees a box, keys sealed to people, a status word: no detail");
+  assert.deepEqual(Object.keys(wire.wraps).sort(), [ship.publicKey, c1.publicKey, c2.publicKey, c3.publicKey].sort(), "the shipper and each invited courier hold the job key");
+  for (const secret of ["12 Dock St", "Ask for Sam", "Pallet jack", "equipment", "oversize", "Downtown", "ASAP", "distanceMiles", "38.04", "-84.5", "\"T\""]) assert.ok(!reqEv.content.includes(secret), `"${secret}" is not on the relay`);
+  assert.deepEqual(reqEv.tags.filter((t) => t[0] === "p").map((t) => t[1]).sort(), [c1.publicKey, c2.publicKey, c3.publicKey].sort(), "who was invited is public metadata (so a courier's history finds it)");
+}
+const content = D.deliveryContent(reqEv);
+assert.equal(content.pickup.approx, true, "the shipper reads the coarse pickup");
 assert.equal(content.what.type, "equipment");
 assert.equal(content.distanceMiles, 8.3);
 assert.deepEqual(content.cdl, { required: true, endorsements: ["T"] });
+assert.equal(content.sealed, JSON.parse(reqEv.content).sealed);
+// The invited courier reads the job; a courier who was not invited reads nothing.
+as(c1); assert.equal(D.deliveryContent(reqEv).what.note, "A pallet jack, 400 lb", "an invited courier opens the box"); assert.equal(D.isReadable(reqEv), true);
+as(stranger); assert.equal(D.deliveryContent(reqEv).pickup, undefined, "someone who was not invited sees nothing"); assert.equal(D.isReadable(reqEv), false);
+assert.equal(D.deliveryContent(reqEv).status, "requested", "only the status word is public");
+as(null); assert.equal(D.isReadable(reqEv), false, "nobody logged in: nothing");
+as(ship);
+assert.deepEqual([...D.deliveryInvited(reqEv)].sort(), [c1.publicKey, c2.publicKey, c3.publicKey].sort());
 assert.equal(D.deliveryStatus(reqEv), "requested");
 assert.equal(D.deliveryCourier(reqEv), null);
 const exactMine = D.exactDelivery(reqEv, user(ship));
@@ -60,17 +76,33 @@ assert.equal(exactMine.contact, "Ask for Sam, 555-0100");
 assert.equal(D.exactDelivery(reqEv, user(c1)), null, "a courier sees the exact places only after being chosen");
 assert.equal(D.exactDelivery(reqEv, user(stranger)), null);
 // junk fields are cleaned
-const odd = JSON.parse(pub(D.requestEvent(user(ship), form({ type: "<script>", size: "huge", time: "not a time" })), ship).content);
+const odd = D.deliveryContent(pub(D.requestEvent(user(ship), form({ type: "<script>", size: "huge", time: "not a time" })), ship));
 assert.equal(odd.what.type, "package"); assert.equal(odd.what.size, "medium"); assert.equal(odd.time, "ASAP");
 
-// ── Expiry ──
+// ── Expiry (and old public requests still read) ──
 const t0 = Math.floor(Date.now() / 1000);
-assert.equal(D.isDeliveryExpired({ content: JSON.stringify({ time: "ASAP" }), created_at: t0 - 11 * 3600 }), false, "an ASAP request lives 12 hours");
-assert.equal(D.isDeliveryExpired({ content: JSON.stringify({ time: "ASAP" }), created_at: t0 - 13 * 3600 }), true);
+const plain = (content, ageSec, d) => { // an OLD request: public, not encrypted
+  const e = buildSignedEvent(K.DELIVERY_REQUEST, content, [["d", d], ["t", "nostrride"]], ship.sk);
+  e.created_at = t0 - ageSec; relay._store(e); return e;
+};
 const later = new Date(Date.now() + 3 * 86400000).toISOString();
-assert.equal(D.isDeliveryExpired({ content: JSON.stringify({ time: later }), created_at: t0 - 86400 }), false, "a future delivery lives until 12 h after its time");
-assert.equal(D.isScheduledDelivery({ content: JSON.stringify({ time: later }) }), true);
-assert.equal(D.isScheduledDelivery({ content: JSON.stringify({ time: "ASAP" }) }), false);
+assert.equal(D.isDeliveryExpired(plain({ time: "ASAP", pickup: { lat: 1, lng: 1 }, dropoff: { lat: 1, lng: 1 } }, 11 * 3600, "e1")), false, "an ASAP request lives 12 hours");
+assert.equal(D.isDeliveryExpired(plain({ time: "ASAP" }, 13 * 3600, "e2")), true);
+assert.equal(D.isDeliveryExpired(plain({ time: later }, 86400, "e3")), false, "a future delivery lives until 12 h after its time");
+assert.equal(D.isScheduledDelivery(plain({ time: later }, 0, "e4")), true);
+assert.equal(D.isScheduledDelivery(plain({ time: "ASAP" }, 0, "e5")), false);
+assert.equal(D.deliveryContent(plain({ time: "ASAP", pickup: { name: "Old St", lat: 1, lng: 2 }, dropoff: { name: "Old Rd", lat: 3, lng: 4 }, what: { type: "package" } }, 0, "e6")).pickup.name, "Old St", "an old public request is read as it always was");
+// An invitation (a newer version) does not restart the clock: a request is 12 h old from its FIRST post.
+{
+  const first = pub(D.requestEvent(user(ship), form()), ship);
+  const old = JSON.parse(first.content);
+  const aged = buildSignedEvent(K.DELIVERY_REQUEST, old, first.tags, ship.sk); aged.created_at = t0 - 13 * 3600; relay._store(aged);
+  const fresh = D.inviteEvent(aged, user(ship), [c1.publicKey]);
+  const newer = pub(fresh, ship);
+  assert.equal(D.deliveryVersions(newer).length >= 2, true);
+  assert.equal(D.isDeliveryExpired(newer), true, "the newest version carries the FIRST post's age");
+  assert.equal(D.deliveryCreatedAt(newer), D.deliveryCreatedAt(aged));
+}
 
 // ── Bids ──
 const b1 = bid(reqEv, c1, { cdl: { has: true, endorsements: ["T", "H"] }, priceSats: 25000, etaMinutes: 40 });
@@ -118,22 +150,30 @@ assert.equal(D.deliveryStatus(reqEv), "requested");
 const reqs = [reqEv];
 const near = { lat: 38.04, lng: -84.5, radiusMiles: 25 };
 const miles = (a, b) => (b ? Math.hypot((a.lat - b.lat) * 69, (a.lng - b.lng) * 54) : null);
-const seen = (cdl, extra = {}) => D.openRequestsFor(reqs, { me: c2.publicKey, cdl, near, distance: miles, ...extra }).length;
+const seen = (cdl, extra = {}) => { as(c2); return D.openRequestsFor(reqs, { me: c2.publicKey, cdl, near, distance: miles, ...extra }).length; };
 assert.equal(seen({ has: false, endorsements: [] }), 0, "no CDL: the request is not shown");
 assert.equal(seen({ has: true, endorsements: [] }), 0, "a CDL without the endorsement: not shown");
 assert.equal(seen({ has: true, endorsements: ["T"] }), 1, "with the endorsement: shown");
 assert.equal(seen({ has: true, endorsements: ["T"] }, { blocked: [{ pubkey: ship.publicKey }] }), 0, "a blocked shipper's request is hidden");
+as(ship);
 assert.equal(D.openRequestsFor(reqs, { me: ship.publicKey, cdl: { has: true, endorsements: ["T"] } }).length, 0, "not your own request");
+as(c2);
 assert.equal(D.openRequestsFor(reqs, { me: c2.publicKey, cdl: { has: true, endorsements: ["T"] }, near: { lat: 10, lng: 10, radiusMiles: 25 }, distance: miles }).length, 0, "too far away");
 // hide tokens: the shipper blocked this courier
-const hidingReq = pub(D.requestEvent(user(ship), form({ hide: B.hideList(ship.publicKey, [{ pubkey: c2.publicKey }]) })), ship);
+const hidingReq = pub(D.requestEvent(user(ship), form({ hide: B.hideList(ship.publicKey, [{ pubkey: c2.publicKey }]) }), [c2.publicKey, c3.publicKey]), ship);
 assert.equal(D.openRequestsFor([hidingReq], { me: c2.publicKey, cdl: { has: false } }).length, 0, "a courier the shipper blocked does not see it");
+as(c3);
 assert.equal(D.openRequestsFor([hidingReq], { me: c3.publicKey, cdl: { has: false } }).length, 1);
-const openReq = pub(D.requestEvent(user(ship), form()), ship);
-assert.equal(D.openRequestsFor([openReq], { me: c2.publicKey, cdl: { has: false } }).length, 1, "no CDL need: every courier sees it");
+as(c2);
+const openReq = pub(D.requestEvent(user(ship), form(), [c2.publicKey]), ship);
+assert.equal(D.openRequestsFor([openReq], { me: c2.publicKey, cdl: { has: false } }).length, 1, "no CDL need: every INVITED courier sees it");
+as(c3);
+assert.equal(D.openRequestsFor([openReq], { me: c3.publicKey, cdl: { has: false } }).length, 0, "a courier who was not invited never sees it");
+as(c2);
 const staleReq = buildSignedEvent(K.DELIVERY_REQUEST, { ...JSON.parse(openReq.content) }, [["d", "old"], ["t", "nostrride"]], ship.sk);
 staleReq.created_at = t0 - 13 * 3600; relay._store(staleReq);
 assert.equal(D.openRequestsFor([staleReq], { me: c2.publicKey, cdl: { has: false } }).length, 0, "an expired request is not shown");
+as(ship);
 
 // ── Accepting ONE bid declines all the others ──
 const cur = D.allBids(reqEv).find((b) => b.courier === c1.publicKey);
@@ -179,10 +219,10 @@ assert.notEqual(D.pickupCode(c1.sk, ship.publicKey, openReq), codeC, "a differen
 assert.notEqual(D.pickupCode(c2.sk, ship.publicKey, reqEv), codeC, "and another courier cannot know it");
 
 // ── Confirming the pickup: only the shipper counts; then the first payment is due ──
-pub(D.confirmEvent(reqEv, c1.publicKey, "pickup"), stranger);
-pub(D.confirmEvent(reqEv, c1.publicKey, "pickup"), c1); // the courier cannot confirm their own pickup
+pub(D.confirmEvent(reqEv, c1.publicKey, "pickup", {}, user(stranger)), stranger);
+pub(D.confirmEvent(reqEv, c1.publicKey, "pickup", {}, user(c1)), c1); // the courier cannot confirm their own pickup
 assert.equal(D.deliveryStatus(reqEv), "assigned", "a confirmation from anyone but the shipper counts for nothing");
-pub(D.confirmEvent(reqEv, c1.publicKey, "pickup"), ship);
+pub(D.confirmEvent(reqEv, c1.publicKey, "pickup", {}, user(ship)), ship);
 assert.equal(D.deliveryStatus(reqEv), "in_transit");
 let due = P.dueNow(reqEv);
 assert.deepEqual([due.phase, due.amountSats, due.mint, due.courier], ["pickup", 8500, MINT, c1.publicKey]);
@@ -195,15 +235,15 @@ assert.equal(P.dueNow(reqEv), null, "never paid twice");
 assert.equal(P.payToken(P.paysOf(reqEv)[0], reqEv, user(c1)), "cashuBtoken1", "the courier opens the token");
 assert.equal(P.payToken(P.paysOf(reqEv)[0], reqEv, user(c3)), null, "nobody else can");
 // a reply from a stranger counts for nothing; the courier's reply does
-pub(P.payReplyEvent(reqEv, pay1, { ok: true, receivedSats: 8500 }), stranger);
+pub(P.payReplyEvent(reqEv, pay1, { ok: true, receivedSats: 8500 }, user(stranger)), stranger);
 assert.equal(P.paidSats(reqEv), 0);
 // a refused payment is due again
-pub(P.payReplyEvent(reqEv, pay1, { ok: false, reason: "spent" }), c1);
+pub(P.payReplyEvent(reqEv, pay1, { ok: false, reason: "spent" }, user(c1)), c1);
 assert.equal(P.paidSats(reqEv), 0); assert.equal(P.sentSats(reqEv), 0, "a refused payment was not sent");
 due = P.dueNow(reqEv);
 assert.equal(due.amountSats, 8500, "the same part is due again");
 const pay1b = pub(P.payEvent(reqEv, c1.publicKey, user(ship), { phase: "pickup", amountSats: 8500, mint: MINT, token: "cashuBtoken2" }), ship);
-pub(P.payReplyEvent(reqEv, pay1b, { ok: true, receivedSats: 8499 }), c1);
+pub(P.payReplyEvent(reqEv, pay1b, { ok: true, receivedSats: 8499 }, user(c1)), c1);
 assert.equal(P.paidSats(reqEv, "pickup"), 8500, "received 8,499 + 2 sats of slack, never more than the payment");
 assert.equal(P.dueNow(reqEv), null);
 
@@ -224,19 +264,19 @@ assert.equal(P.dueNow(reqEv), null, "the rest is paid only when the shipper conf
 assert.equal(D.deliveryPhoto(reqEv, user(ship)), "data:image/jpeg;base64,AAAA", "the photo is for the shipper");
 assert.equal(D.deliveryPhoto(reqEv, user(stranger)), null);
 assert.ok(!relay.query({ kinds: [K.DELIVERY_STAGE] }).some((e) => e.content.includes("AAAA")), "the photo is not in the public event");
-pub(D.confirmEvent(reqEv, c1.publicKey, "problem", { ok: false, note: "dented" }), ship);
+pub(D.confirmEvent(reqEv, c1.publicKey, "problem", { ok: false, note: "dented" }, user(ship)), ship);
 assert.equal(D.deliveryStatus(reqEv), "disputed", "a reported problem holds the final payment");
 assert.equal(P.dueNow(reqEv), null);
-pub(D.confirmEvent(reqEv, c1.publicKey, "delivered", { verified: "gps+photo" }), ship);
+pub(D.confirmEvent(reqEv, c1.publicKey, "delivered", { verified: "gps+photo" }, user(ship)), ship);
 assert.equal(D.deliveryStatus(reqEv), "completed");
 assert.equal(D.deliveryVerified(reqEv), "gps+photo", "the confirmation says how it was checked");
 due = P.dueNow(reqEv);
 assert.deepEqual([due.phase, due.amountSats], ["final", 8500]);
 const pay2 = pub(P.payEvent(reqEv, c1.publicKey, user(ship), { phase: "final", amountSats: 5000, mint: MINT, token: "cashuBpart" }), ship); // a short wallet pays what it can
 assert.equal(P.dueNow(reqEv).amountSats, 3500, "the rest stays due");
-pub(P.payReplyEvent(reqEv, pay2, { ok: true, receivedSats: 5000 }), c1);
+pub(P.payReplyEvent(reqEv, pay2, { ok: true, receivedSats: 5000 }, user(c1)), c1);
 const pay3 = pub(P.payEvent(reqEv, c1.publicKey, user(ship), { phase: "final", amountSats: 3500, mint: MINT, token: "cashuBrest" }), ship);
-pub(P.payReplyEvent(reqEv, pay3, { ok: true, receivedSats: 3500 }), c1);
+pub(P.payReplyEvent(reqEv, pay3, { ok: true, receivedSats: 3500 }, user(c1)), c1);
 assert.equal(P.dueNow(reqEv), null);
 const money = P.moneyOf(reqEv);
 assert.equal(money.priceSats, 17000); assert.ok(money.owedSats <= 2, "paid in full (a sat or two of mint fee slack): " + money.owedSats);
@@ -254,10 +294,10 @@ const nb = bid(req2, c2, { priceSats: 4000, upfrontPct: 0 });
 const bid2 = D.allBids(req2)[0];
 const [acc2, ver2] = D.acceptEvents(req2, user(ship), bid2, D.exactDelivery(req2, user(ship)));
 pub(acc2, ship); pub(ver2, ship);
-pub(D.confirmEvent(req2, c2.publicKey, "pickup"), ship);
+pub(D.confirmEvent(req2, c2.publicKey, "pickup", {}, user(ship)), ship);
 assert.equal(P.dueNow(req2), null, "with 0 % upfront nothing is due at pickup");
 pub(D.stageEvent(req2, user(c2), "delivered"), c2);
-pub(D.confirmEvent(req2, c2.publicKey, "delivered"), ship);
+pub(D.confirmEvent(req2, c2.publicKey, "delivered", {}, user(ship)), ship);
 assert.deepEqual([P.dueNow(req2).phase, P.dueNow(req2).amountSats], ["final", 4000]);
 
 const req3 = pub(D.requestEvent(user(ship), form()), ship);
@@ -274,7 +314,7 @@ const req4 = pub(D.requestEvent(user(ship), form()), ship);
 bid(req4, c3, {});
 const [acc4, ver4] = D.acceptEvents(req4, user(ship), D.allBids(req4)[0], D.exactDelivery(req4, user(ship)));
 pub(acc4, ship); pub(ver4, ship);
-pub(D.confirmEvent(req4, c3.publicKey, "pickup"), ship);
+pub(D.confirmEvent(req4, c3.publicKey, "pickup", {}, user(ship)), ship);
 pub(D.stageEvent(req4, user(c3), "withdrawn"), c3);
 assert.equal(D.deliveryStatus(req4), "in_transit", "a courier cannot walk away with the parcel");
 
@@ -284,7 +324,7 @@ const toDelivered = (fixOpts, photo) => {
   bid(r, c2, {});
   const [a, v] = D.acceptEvents(r, user(ship), D.allBids(r)[0], D.exactDelivery(r, user(ship)));
   pub(a, ship); pub(v, ship);
-  pub(D.confirmEvent(r, c2.publicKey, "pickup"), ship);
+  pub(D.confirmEvent(r, c2.publicKey, "pickup", {}, user(ship)), ship);
   pub(D.stageEvent(r, user(c2), "delivered", { photo, fix: fixOpts }), c2);
   return r;
 };
@@ -305,11 +345,11 @@ pr = D.deliveryProof(toDelivered(here, "data:text/html;base64,PHNjcmlwdD4="), us
 assert.equal(pr.photo, null, "only an image counts as the photo");
 // the shipper can still confirm a delivery GoGet could not verify, saying so
 const unsure = toDelivered(null, "");
-pub(D.confirmEvent(unsure, c2.publicKey, "delivered", { verified: "outside" }), ship);
+pub(D.confirmEvent(unsure, c2.publicKey, "delivered", { verified: "outside" }, user(ship)), ship);
 assert.equal(D.deliveryVerified(unsure), "outside");
 assert.equal(D.deliveryStatus(unsure), "completed");
 const junkWay = toDelivered(here, PIC);
-pub(D.confirmEvent(junkWay, c2.publicKey, "delivered", { verified: "trust me" }), ship);
+pub(D.confirmEvent(junkWay, c2.publicKey, "delivered", { verified: "trust me" }, user(ship)), ship);
 assert.equal(D.deliveryVerified(junkWay), null, "only the two known ways are read");
 assert.ok(!relay.query({ kinds: [K.DELIVERY_STAGE] }).some((e) => e.content.includes("38.1") || e.content.includes("BBBB")), "neither the photo nor the position is public");
 
@@ -358,4 +398,71 @@ pub(D.versionEvent(req5, { status: "closed" }), ship);
 assert.equal(D.deliveryStatus(req5), "closed");
 assert.deepEqual(D.pendingBids(req5), []);
 assert.equal(D.bidState(req5, D.allBids(req5)[0]), "closed");
+// ── Everything about a job is sealed: what a relay (or another courier) can read ──
+{
+  const everything = [K.DELIVERY_REQUEST, K.DELIVERY_BID, K.DELIVERY_ACCEPT, K.DELIVERY_BID_DECLINE, K.DELIVERY_STAGE, K.DELIVERY_CONFIRM, K.DELIVERY_PAY, K.DELIVERY_PAY_REPLY];
+  const wire = relay.query({ kinds: everything }).filter((e) => [reqEv.pubkey, c1.publicKey, c2.publicKey, c3.publicKey].includes(e.pubkey)).map((e) => e.content).join("\n");
+  // Only the NEW sealed events carry these words; the old public requests built for the expiry test do not hold them.
+  for (const secret of ["Pallet jack", "I have a lift gate", "Box truck", "cashuBtoken", "cashuBrest", "dented", "gps+photo", "AAAA", "BBBB", "Ask for Sam", "12 Dock St"]) assert.ok(!wire.includes(secret), `"${secret}" is on no relay`);
+  for (const e of relay.query({ kinds: [K.DELIVERY_BID, K.DELIVERY_PAY, K.DELIVERY_PAY_REPLY, K.DELIVERY_CONFIRM] }).filter((x) => JSON.parse(x.content).v === 2)) {
+    const c = JSON.parse(e.content);
+    assert.equal(typeof c.sealed, "string", "a sealed body");
+    for (const k of ["priceSats", "amountSats", "receivedSats", "mint", "token", "note", "verified", "etaMinutes", "cdl", "vehicle"]) assert.equal(c[k], undefined, `${k} is not public`);
+  }
+}
+// A bid is readable by the courier who wrote it and the shipper: not by another courier.
+{
+  const mine = bid(reqEv, c1, { priceSats: 13579, note: "secret note" });
+  as(ship); assert.equal(D.allBids(reqEv).find((b) => b.courier === c1.publicKey)?.priceSats, 13579, "the shipper reads the bid");
+  as(c1); assert.equal(D.allBids(reqEv).find((b) => b.courier === c1.publicKey)?.priceSats, 13579, "the courier reads their own bid");
+  as(c3); assert.deepEqual(D.allBids(reqEv).filter((b) => b.courier !== c3.publicKey), [], "another courier cannot read it (a competitor never sees the price); their own bid they can");
+  as(stranger); assert.equal(D.allBids(reqEv).length, 0);
+  as(null); assert.equal(D.allBids(reqEv).length, 0, "nobody logged in: nothing");
+  assert.equal(mine.tags.some((t) => t[0] === "p" && t[1] === ship.publicKey), true, "who it is addressed to is public");
+  as(ship);
+}
+// Payments, confirmations and the proof: the shipper and the courier read them; a third person does not.
+{
+  as(ship); assert.ok(P.paysOf(reqEv).length >= 3 && P.sentSats(reqEv) >= 17000);
+  as(c1); assert.ok(P.paysOf(reqEv).length >= 3, "the courier reads the payments to them"); assert.equal(D.deliveryVerified(reqEv), "gps+photo");
+  as(c3); assert.deepEqual(P.paysOf(reqEv), [], "another courier sees no payment"); assert.equal(P.sentSats(reqEv), 0); assert.equal(P.paidSats(reqEv), 0);
+  assert.equal(D.deliveryVerified(reqEv), null, "nor how it was checked");
+  assert.equal(D.deliveryStatus(reqEv), "completed", "but the status words are public: anyone can tell a job was completed");
+  assert.equal(D.deliveryProof(reqEv, user(c3)).photo, null);
+  as(ship);
+}
+// Counts on a profile need no key: they come from the public status words.
+{
+  as(stranger);
+  const { latestVersions } = await import(`${R}/nostr/replaceable.js`);
+  const everyRequest = latestVersions(relay.query({ kinds: [K.DELIVERY_REQUEST] })); // what the app keeps: the newest version of each
+  assert.equal(D.deliveryCounts(everyRequest, c1.publicKey).carried, 1, "a stranger can count a courier's finished deliveries");
+  assert.equal(D.deliveryMiles(everyRequest, c1.publicKey), 0, "but the route length is sealed: no miles for what they cannot read");
+  as(ship);
+}
+// Inviting more couriers later: a new version with more wraps; the same set again does nothing; a stranger's request cannot be extended.
+{
+  const rq = pub(D.requestEvent(user(ship), form(), [c1.publicKey]), ship);
+  assert.equal(D.inviteEvent(rq, user(ship), [c1.publicKey]), null, "already invited: nothing to add");
+  assert.equal(D.inviteEvent(rq, user(stranger), [c2.publicKey]), null, "only the shipper can invite");
+  const more = D.inviteEvent(rq, user(ship), [c2.publicKey, c2.publicKey, "nothex", ship.publicKey]);
+  assert.deepEqual(Object.keys(more.content.wraps).sort(), [ship.publicKey, c1.publicKey, c2.publicKey].sort(), "the shipper and each courier, once; junk and the shipper's own key are not added again");
+  assert.equal(more.content.box, JSON.parse(rq.content).box, "the same box and key: one job");
+  pub(more, ship);
+  as(c2); assert.equal(D.deliveryContent(rq).what.type, "equipment", "a courier invited LATER reads the job from the newer version");
+  as(c1); assert.equal(D.deliveryContent(rq).what.type, "equipment", "and the first one still does");
+  as(ship);
+  assert.deepEqual([...D.deliveryInvited(rq)].sort(), [c1.publicKey, c2.publicKey].sort());
+  // a status change keeps the box, the wraps and the places
+  const closed = D.versionEvent(rq, { status: "closed" });
+  assert.deepEqual(Object.keys(closed.content.wraps).sort(), [ship.publicKey, c1.publicKey, c2.publicKey].sort());
+  assert.ok(closed.content.sealed && closed.content.box);
+  assert.deepEqual(closed.tags.filter((t) => t[0] === "p").map((t) => t[1]).sort(), [c1.publicKey, c2.publicKey].sort());
+  // an old public request cannot be invited to
+  assert.equal(D.inviteEvent(plain({ time: "ASAP" }, 0, "e7"), user(ship), [c1.publicKey]), null);
+  // the number of couriers per request is capped
+  const crowd = Array.from({ length: 80 }, () => generateKeypair().publicKey);
+  assert.equal(Object.keys(D.requestEvent(user(ship), form(), crowd).content.wraps).length, 1 + (await import(`${R}/lib/couriers.js`)).MAX_INVITES, "a request is sent to at most 50 couriers");
+}
+
 console.log("delivery tests ok");

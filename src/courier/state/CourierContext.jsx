@@ -4,6 +4,8 @@
 //  CDL need), `jobs` (deliveries the shipper gave this courier), `bids` (this courier's bids and where they stand). UI-only: the radius.
 //  Actions: placeBid / withdrawBid (a price, minutes to the pickup, notes, the CDL statement from Account → Courier details),
 //  markDelivered (needs a good GPS fix near the drop-off; the proof, a photo + that fix, is sealed to the shipper), withdrawJob (only before the pickup).
+//  Availability: a delivery request is encrypted, so a shipper's app INVITES the couriers who are available (lib/couriers.js). While the Courier
+//  context is open and "Receive new jobs" is on, a public presence beat (a coarse place, the distance, the CDL statement) goes out every 90 s.
 //  Timers: every 3 s redeem the shipper's ecash payments (features/payments/redeemDelivery.js); every 6 s send the courier's exact
 //  position, encrypted, to the shipper of each running job; every 8 s ask the relays for news. The screen stays awake during a job.
 // ════════════════════════════════════════════════════════════
@@ -13,7 +15,8 @@ import { useApp } from "../../state/AppContext.jsx";
 import { useGeolocation } from "../../lib/useGeolocation.js";
 import { useWakeLock } from "../../lib/useWakeLock.js";
 import { haversineDistance } from "../../lib/geo.js";
-import { publishRideLocation } from "../../nostr/live.js";
+import { publishRideLocation, publishCourierPresence } from "../../nostr/live.js";
+import { hideList } from "../../lib/blocks.js";
 import { getMyMint } from "../../features/ecash/myMint.js";
 import { redeemDeliveryFor } from "../../features/payments/redeemDelivery.js";
 import { bidEvent, bidsOfCourier, deliveryContent, deliveryStatus, exactDelivery, jobsFor, openRequestsFor, stageEvent, withdrawBidEvent, DELIVERED_NEAR_M, DEFAULT_UPFRONT } from "../../lib/delivery.js";
@@ -31,6 +34,10 @@ export function CourierProvider({ children }) {
   const { pos: myPosition, error: geoError, status: gps } = useGeolocation(true);
   const [radius, setRadiusState] = useState(() => getSetting("courierRadius", DEFAULT_REQUEST_RADIUS_MILES * 2));
   const setRadius = useCallback((v) => { setRadiusState(v); setSetting("courierRadius", v); }, []);
+
+  // "Receive new jobs": while it is on, shippers near me can invite me to their requests (a public presence beat, see below).
+  const [available, setAvailableState] = useState(() => getSetting("courierAvailable", true) !== false);
+  const setAvailable = useCallback((v) => { setAvailableState(!!v); setSetting("courierAvailable", !!v); }, []);
 
   void liveTick;
   const cdl = normalizeCdl(user.courier?.cdl);
@@ -51,6 +58,21 @@ export function CourierProvider({ children }) {
     const id = setInterval(() => pullRecent(), 8000);
     return () => clearInterval(id);
   }, [pullRecent, refreshData]);
+
+  // ── Presence: tell shippers near me that I am available (a public, coarse beat; it expires in 3 minutes) ──
+  const beat = useRef({});
+  beat.current = { user, myPosition, gps, radius, cdl, blocked, me };
+  useEffect(() => {
+    if (!available) return undefined;
+    const send = () => {
+      const { user: u, myPosition: p, gps: g, radius: r, cdl: c, blocked: bl, me: m } = beat.current;
+      if (!p || g === "stale" || g === "error") return;
+      publishCourierPresence(u, { lat: p.lat, lng: p.lng, radiusMiles: r, cdl: c, hide: hideList(m, bl) });
+    };
+    send();
+    const id = setInterval(send, 90000);
+    return () => clearInterval(id);
+  }, [available, !!myPosition, radius, JSON.stringify(cdl)]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Bids ──
   const placeBid = useCallback(async (request, { priceSats, etaMinutes, note, upfrontPct = DEFAULT_UPFRONT }) => {
@@ -120,7 +142,7 @@ export function CourierProvider({ children }) {
   }, []);
 
   const value = {
-    myPosition, geoError, gps, radius, setRadius, cdl, ready, mint,
+    myPosition, geoError, gps, radius, setRadius, cdl, ready, mint, available, setAvailable,
     open, jobs, bids, placeBid, withdrawBid, markDelivered, withdrawJob, canDeliver, distanceToDropoff, screenMayDim,
     contentOf: deliveryContent,
   };

@@ -23,7 +23,7 @@ const me = { sk: kp.sk, publicKey: kp.publicKey };
 const id16 = kp.publicKey.slice(0, 16);
 
 // ── What is in the backup, and what never is ──
-for (const key of ["blocked", "genderPref", "requestAlerts", "requestRadius", "courierRadius", "currency", "amountUnit", "trustedContacts", "ecashMint", "dark", "relays", `autoCashOut_${id16}`, `goget_context_${id16}`, `notice_shipping_${id16}`]) assert.equal(B.inBackup(key, kp.publicKey), true, key);
+for (const key of ["blocked", "genderPref", "requestAlerts", "requestRadius", "courierRadius", "courierAvailable", "currency", "amountUnit", "trustedContacts", "ecashMint", "dark", "relays", `autoCashOut_${id16}`, `goget_context_${id16}`, `notice_shipping_${id16}`]) assert.equal(B.inBackup(key, kp.publicKey), true, key);
 for (const key of ["key", "driver_key", "outbox", "prices", "riderDone", "driverDone", "stopsPassed", "tripShare", "declinedRides", "expiredNoted", "fold_ecash", `ecashOff_${id16}`, "_backup_x", `goget_context_${other.publicKey.slice(0, 16)}`, `notice_shipping_${other.publicKey.slice(0, 16)}`, "seedbox", ""])
   assert.equal(B.inBackup(key, kp.publicKey), false, `${key} stays on this device (a secret, a cache, or another account's)`);
 assert.equal(B.inBackup(null, kp.publicKey), false);

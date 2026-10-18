@@ -14,12 +14,14 @@
 //    paidSats / sentSats(request, phase?)   confirmed by the courier / sent by the shipper
 //    neededToAccept(bid)         ecash the shipper should hold at the bid's mint before taking it (price + a margin for the mint's fee)
 //  Writers: payEvent (shipper), payReplyEvent (courier). Readers check who wrote what.
+//  PRIVACY: a payment's amount, mint and token are sealed to the courier, a reply's amount and reason to the shipper (lib/delivery.js): relays
+//  see that a payment of phase "pickup" or "final" happened, not how much. Only the shipper and the courier of a delivery can read its payments.
 // ════════════════════════════════════════════════════════════
 
 import { relay } from "../nostr/relay.js";
 import { EVENT_KINDS as K } from "../nostr/eventKinds.js";
 import { seal, unseal } from "./privacy.js";
-import { acceptedBid, confirmsOf, deliveryCourier, deliveryKey, deliveryStatus, deliveryVersions } from "./delivery.js";
+import { acceptedBid, confirmsOf, deliveryCourier, deliveryKey, deliveryStatus, deliveryVersions, getDeliveryViewer, otherParty } from "./delivery.js";
 
 const parse = (e) => { try { return JSON.parse(e.content); } catch { return null; } };
 const etags = (e) => e.tags.filter((t) => t[0] === "e").map((t) => t[1]);
@@ -39,28 +41,34 @@ export function payEvent(request, courierPubkey, user, { phase, amountSats, mint
   const latest = deliveryVersions(request)[0] || request;
   return {
     kind: K.DELIVERY_PAY,
-    content: { phase, amountSats, mint, at: Date.now(), sealed: seal(user.sk, courierPubkey, { token }) },
+    content: { v: 2, phase, sealed: seal(user.sk, courierPubkey, { token, amountSats, mint, at: Date.now() }) },
     tags: [["e", latest.id], ["p", courierPubkey], ["d", `pay-${deliveryKey(request)}-${phase}-${nonce}`], ["t", "delivery"]],
   };
 }
-export function payReplyEvent(request, payEventObj, { ok, receivedSats = 0, reason = "" }) {
+export function payReplyEvent(request, payEventObj, { ok, receivedSats = 0, reason = "" }, user = getDeliveryViewer()) {
   const latest = deliveryVersions(request)[0] || request;
   return {
     kind: K.DELIVERY_PAY_REPLY,
-    content: { payId: payEventObj.id, ok: !!ok, receivedSats, reason: String(reason).slice(0, 200) },
+    content: { v: 2, payId: payEventObj.id, ok: !!ok, sealed: seal(user.sk, request.pubkey, { receivedSats, reason: String(reason).slice(0, 200) }) },
     tags: [["e", latest.id], ["e", payEventObj.id], ["p", request.pubkey], ["d", "pay-reply-" + payEventObj.id], ["t", "delivery"]],
   };
 }
 
 // ── Reading ──
-// The valid payments, oldest first: [{ id, event, phase, amountSats, mint, createdAt }]. Only the shipper's, to the assigned courier.
+// The valid payments, oldest first: [{ id, event, phase, amountSats, mint, createdAt }]. Only the shipper's, to the assigned courier. Only the shipper
+// and the courier can open them (a third person gets none).
 export function paysOf(request) {
   const courier = deliveryCourier(request);
   if (!courier) return [];
+  const viewer = getDeliveryViewer(), other = otherParty(request, courier);
   const ids = new Set(deliveryVersions(request).map((e) => e.id));
   return relay.query({ kinds: [K.DELIVERY_PAY], authors: [request.pubkey], "#p": [courier] })
     .filter((e) => etags(e).some((id) => ids.has(id)))
-    .map((e) => ({ e, c: parse(e) }))
+    .map((e) => {
+      let c = parse(e);
+      if (c && c.v === 2) { const inner = other ? unseal(viewer.sk, other, c.sealed) : null; c = inner && typeof inner === "object" ? { ...inner, phase: c.phase, sealed: c.sealed } : null; }
+      return { e, c };
+    })
     .filter(({ c }) => c && PHASES.includes(c.phase) && sats(c.amountSats) && typeof c.sealed === "string")
     .map(({ e, c }) => ({ id: e.id, event: e, phase: c.phase, amountSats: c.amountSats, mint: String(c.mint || ""), createdAt: e.created_at }))
     .sort((a, b) => a.createdAt - b.createdAt);
@@ -70,12 +78,14 @@ export function paysOf(request) {
 export function payReplies(request) {
   const courier = deliveryCourier(request), out = new Map();
   if (!courier) return out;
+  const viewer = getDeliveryViewer(), other = otherParty(request, courier);
   const ids = new Set(deliveryVersions(request).map((e) => e.id));
   relay.query({ kinds: [K.DELIVERY_PAY_REPLY], authors: [courier], "#p": [request.pubkey] })
     .filter((e) => etags(e).some((id) => ids.has(id)))
     .sort((a, b) => a.created_at - b.created_at)
     .forEach((e) => {
-      const c = parse(e);
+      let c = parse(e);
+      if (c && c.v === 2) { const inner = other ? unseal(viewer.sk, other, c.sealed) : null; c = inner && typeof inner === "object" ? { ...inner, payId: c.payId, ok: c.ok } : null; }
       if (!c || typeof c.payId !== "string" || out.get(c.payId)?.ok) return;
       out.set(c.payId, { ok: c.ok === true, receivedSats: sats(c.receivedSats) || 0, reason: typeof c.reason === "string" ? c.reason : "" });
     });

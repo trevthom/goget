@@ -65,9 +65,9 @@ export function useSaveProfile() {
 
 // Photo, name (tap the pencil to edit), and the trip count for this app's role.
 export function AccountHeader({ photoRequired = false }) {
-  const { user, deliveryRequests } = useApp();
+  const { user, deliveryAll } = useApp();
   const save = useSaveProfile();
-  const rep = personStats(user.publicKey, deliveryRequests);
+  const rep = personStats(user.publicKey, deliveryAll);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(user.name);
   const [lightbox, setLightbox] = useState(false);

@@ -26,6 +26,7 @@ import { APP_NAME } from "../config/app.js";
 import { getSetting, setSetting, reconnectAll } from "../config/relays.js";
 import { addBlock, removeBlock, isBlocked } from "../lib/blocks.js";
 import { useBackup } from "./useBackup.js";
+import { setDeliveryViewer, deliveryContent } from "../lib/delivery.js";
 import { showSystemNotification } from "../lib/notify.js";
 import { PRICE_CODES, PRICE_MAX_AGE_MS, getCurrency, setCurrency as saveCurrency, onCurrencyChange } from "../lib/currency.js";
 import { FALLBACK_BTC_USD } from "../config/settings.js";
@@ -74,7 +75,8 @@ export function AppProvider({ initialView, children }) {
   const [user, setUser] = useState(null); // logged-in keypair + profile
   const [view, setView] = useState(initialView); // which tab is visible
   const [rideRequests, setRideRequests] = useState([]); // latest version of each
-  const [deliveryRequests, setDeliveryRequests] = useState([]); // GoGet: latest version of each delivery request
+  const [deliveryRequests, setDeliveryRequests] = useState([]); // GoGet: latest version of each delivery request THIS person can read (their own, ones they were invited to)
+  const [deliveryAll, setDeliveryAll] = useState([]); // GoGet: the latest version of EVERY delivery request in the cache, readable or not (counts on a profile need only the public status words)
   const [profileModalPubkey, setProfileModalPubkey] = useState(null); // user-info modal
   const [notices, setNotices] = useState([]); // transient swipe-away banners
   const [liveTick, setLiveTick] = useState(0); // bumped on incoming relay events to re-render
@@ -217,14 +219,16 @@ export function AppProvider({ initialView, children }) {
       }
     });
     setRideRequests(reqs);
-    setDeliveryRequests(latestVersions(relay.query({ kinds: [EVENT_KINDS.DELIVERY_REQUEST] })).filter((r) => {
-      try { const c = JSON.parse(r.content); return c && c.pickup && c.dropoff; } catch { return false; }
-    }));
+    const allDeliveries = latestVersions(relay.query({ kinds: [EVENT_KINDS.DELIVERY_REQUEST] }));
+    setDeliveryAll(allDeliveries);
+    setDeliveryRequests(allDeliveries.filter((r) => { try { const c = deliveryContent(r); return !!(c && c.pickup && c.dropoff); } catch { return false; } }));
   }, []);
 
+  // Delivery requests are encrypted (lib/jobseal.js): they can be read only with the logged-in person's key, so tell the readers who that is.
   useEffect(() => {
+    setDeliveryViewer(user);
     refreshData();
-  }, [refreshData]);
+  }, [user?.publicKey, refreshData]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Pull recent events from the relays, then refresh the list. Screens call
   // this on open and on a poll, so it also catches what the live
@@ -386,6 +390,7 @@ export function AppProvider({ initialView, children }) {
     setView,
     rideRequests,
     deliveryRequests,
+    deliveryAll,
     refreshData,
     pullRecent,
     publish,

@@ -24,6 +24,7 @@ import { finalizeEvent, nip44 } from "nostr-tools";
 import { EVENT_KINDS, APP_TAG } from "./eventKinds.js";
 import { getRelays, onRelaysChange } from "../config/relays.js";
 import { hidesMe } from "../lib/blocks.js";
+import { readPresence, COURIER_PRESENCE_TTL_MS } from "../lib/couriers.js";
 
 // maxWaitForConnection: the library's 3 s default DROPS a slow relay for good (see nostr/relay.js).
 const pool = new SimplePool({ enablePing: true, enableReconnect: true, maxWaitForConnection: 15000 });
@@ -115,6 +116,55 @@ export function subscribePresence(onDrivers, { excludePubkey, viewerPubkey } = {
     offChange();
     try { sub && sub.close(); } catch { /* ignore */ }
   };
+}
+
+// ── Courier presence (public): "available for deliveries near here" ───────────────────────────
+// A delivery request is encrypted, so a courier cannot browse it on a relay: the shipper's app INVITES the couriers who are available (lib/couriers.js).
+// The beat is public like a taxi driver's: a coarse place (~1 km), how far the courier will go, their CDL statement, tokens of the shippers they blocked.
+// Addressable (d "courier"), expires 3 minutes after the last beat (NIP-40).
+const coarseKm = (n) => Math.round(n * 100) / 100;
+export async function publishCourierPresence(user, { lat, lng, radiusMiles, cdl, hide }) {
+  const content = JSON.stringify({
+    lat: coarseKm(lat), lng: coarseKm(lng), radiusMiles, cdl: { has: !!cdl?.has, endorsements: cdl?.has ? cdl.endorsements || [] : [] },
+    ...(hide?.length && { hide }), ts: Date.now(),
+  });
+  const event = finalizeEvent(
+    { kind: EVENT_KINDS.COURIER_PRESENCE, created_at: nowSec(), tags: [["d", "courier"], ["t", "courier-presence"], ["t", APP_TAG], ["expiration", String(nowSec() + 180)]], content },
+    user.sk
+  );
+  try { await Promise.allSettled(pool.publish(getRelays(), event)); } catch { /* offline: the next beat tries again */ }
+}
+
+// The shipper's app watches who is available. Calls onList(list of readPresence()) on changes; returns an unsubscribe function.
+export function subscribeCourierPresence(onList, { excludePubkey } = {}) {
+  const found = new Map();
+  let sub = null, closed = false;
+  const emit = () => {
+    const cutoff = Date.now() - COURIER_PRESENCE_TTL_MS;
+    for (const [k, p] of found) if (p.ts < cutoff) found.delete(k);
+    onList([...found.values()]);
+  };
+  const take = (ev) => {
+    if (excludePubkey && ev.pubkey === excludePubkey) return;
+    let c = null;
+    try { c = JSON.parse(ev.content); } catch { return; }
+    const p = readPresence(ev.pubkey, c);
+    if (!p) return;
+    const prev = found.get(ev.pubkey);
+    if (prev && prev.ts > p.ts) return;
+    found.set(ev.pubkey, p);
+    emit();
+  };
+  const open = () => {
+    try { sub && sub.close(); } catch { /* ignore */ }
+    const filter = { kinds: [EVENT_KINDS.COURIER_PRESENCE], "#t": [APP_TAG], since: nowSec() - 300 };
+    pool.querySync(getRelays(), filter).then((evs) => { if (!closed) evs.forEach(take); }).catch(() => {});
+    sub = pool.subscribeMany(getRelays(), filter, { onevent: take });
+  };
+  open();
+  const offChange = onRelaysChange(open);
+  const sweeper = setInterval(emit, 10000);
+  return () => { closed = true; clearInterval(sweeper); offChange(); try { sub && sub.close(); } catch { /* ignore */ } };
 }
 
 // ── Ride location (encrypted, driver → matched rider) ────────

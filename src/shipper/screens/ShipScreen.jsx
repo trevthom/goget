@@ -14,13 +14,13 @@ import Icon from "../../ui/Icon.jsx";
 import PlaceSearch from "../../features/places/PlaceSearch.jsx";
 import PinPicker from "../../features/places/PinPicker.jsx";
 import EndorsementChips from "../../features/goget/EndorsementChips.jsx";
-import { DELIVERY_TYPES, DELIVERY_SIZES, exactDelivery, MAX_NOTE } from "../../lib/delivery.js";
+import { DELIVERY_TYPES, DELIVERY_SIZES, deliveryContent, exactDelivery, MAX_NOTE } from "../../lib/delivery.js";
 import { SAMPLE_LOCATIONS } from "../../lib/locations.js";
 
 const WORDS = {
   title: "Plan your delivery", pickup: "Pickup location", dropoff: "Drop-off location", dropoffPlaceholder: "Where is it going?",
   hint: "Not sure of the address? Try entering the name of a business or landmark, like a store, a warehouse or a hotel.",
-  note: "Couriers see only the approximate area until you pick one.",
+  note: "Your delivery is encrypted. Only couriers online near the pickup are invited to read it, and they see only the approximate area until you pick one.",
 };
 const chip = (on) => `px-3.5 py-2 rounded-full text-sm font-semibold border ${on ? "bg-black text-white border-black" : "bg-white text-neutral-700 border-neutral-300 active:bg-neutral-100"}`;
 const localNow = (offsetMs = 0) => new Date(Date.now() + offsetMs - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
@@ -33,7 +33,7 @@ function recentsOf(mine, user) {
     if (!ex) continue;
     for (const f of ["pickup", "dropoff"]) {
       const p = ex[f];
-      if (out[f].length < 3 && !out[f].some((x) => x.name === p.name)) out[f].push({ ...p, area: JSON.parse(r.content)?.[f]?.name || "" });
+      if (out[f].length < 3 && !out[f].some((x) => x.name === p.name)) out[f].push({ ...p, area: deliveryContent(r)?.[f]?.name || "" });
     }
   }
   return out;

@@ -8,6 +8,7 @@ import { useState } from "react";
 import { useApp } from "../../state/AppContext.jsx";
 import { useCourier, RADIUS_CHOICES } from "../state/CourierContext.jsx";
 import { Screen } from "../../ui/Layout.jsx";
+import { Toggle } from "../../ui/Parts.jsx";
 import Icon from "../../ui/Icon.jsx";
 import Money from "../../ui/Money.jsx";
 import BidForm from "../components/BidForm.jsx";
@@ -17,7 +18,7 @@ import { gpsMessage } from "../../lib/gps.js";
 
 export default function JobsScreen() {
   const { setView } = useApp();
-  const { open, bids, radius, setRadius, myPosition, geoError, gps, ready } = useCourier();
+  const { open, bids, radius, setRadius, myPosition, geoError, gps, ready, available, setAvailable } = useCourier();
   const [picked, setPicked] = useState(null); // request id
   const mineBid = (r) => bids.find((b) => b.request.id === r.id && b.state === "pending")?.bid;
   const selected = picked ? open.find((x) => x.request.id === picked)?.request : null;
@@ -30,6 +31,14 @@ export default function JobsScreen() {
         </p>
       )}
       {!myPosition && <p className="text-sm text-neutral-600 mb-3" role="status">{gpsMessage(gps, myPosition, geoError)} Until your location is known, every open request is shown.</p>}
+
+      <div className="flex items-center gap-3 mb-3 rounded-2xl bg-neutral-100 px-4 py-3">
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold text-[15px]">Receive new jobs</p>
+          <p className="text-xs text-neutral-500">Delivery requests are encrypted. Shippers near you can send you theirs only while this is on. It shares your area (about 1 km), your distance and your CDL statement.</p>
+        </div>
+        <Toggle checked={available} onChange={setAvailable} label="Receive new jobs" />
+      </div>
 
       <div className="flex items-center gap-2 mb-4">
         <span className="text-sm text-neutral-500">Within</span>
@@ -45,7 +54,7 @@ export default function JobsScreen() {
         <div className="text-center py-12">
           <Icon name="package" size={40} className="mx-auto text-neutral-300 mb-3" />
           <p className="font-semibold">No delivery requests right now</p>
-          <p className="text-neutral-500 text-sm mt-1">New ones appear here by themselves. Requests that need a CDL or an endorsement you did not list are hidden.</p>
+          <p className="text-neutral-500 text-sm mt-1">{available ? "Shippers near you send you their requests as they post them. They appear here by themselves. Requests that need a CDL or an endorsement you did not list are not sent to you." : "Turn on “Receive new jobs” so shippers near you can send you their requests."}</p>
         </div>
       ) : (
         <ul className="space-y-3">

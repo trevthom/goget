@@ -20,7 +20,7 @@ import Icon from "./Icon.jsx";
 import BlockButton from "./BlockButton.jsx";
 
 export default function UserModal() {
-  const { profileModalPubkey, closeProfile, deliveryRequests } = useApp();
+  const { profileModalPubkey, closeProfile, deliveryAll } = useApp();
   const [zoom, setZoom] = useState(false);
 
   // Escape closes the modal.
@@ -42,7 +42,7 @@ export default function UserModal() {
   if (!profileModalPubkey) return null;
 
   const p = getProfile(profileModalPubkey);
-  const rep = personStats(profileModalPubkey, deliveryRequests);
+  const rep = personStats(profileModalPubkey, deliveryAll);
   const name = p?.name || "Anonymous";
   const veh = p?.vehicle || null;
 

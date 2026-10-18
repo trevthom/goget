@@ -30,7 +30,7 @@ export async function redeemDeliveryFor({ user, ecash, publish, requests, nowMs 
       if ((retryAt.get(pay.id) || 0) > nowMs) { out.waiting++; continue; }
       inFlight.add(pay.id);
       const answer = (ok, receivedSats, reason) => {
-        const ev = payReplyEvent(request, pay.event, { ok, receivedSats, reason });
+        const ev = payReplyEvent(request, pay.event, { ok, receivedSats, reason }, user);
         publish(ev.kind, ev.content, ev.tags).catch(() => {});
       };
       try {

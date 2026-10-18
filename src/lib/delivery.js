@@ -19,6 +19,12 @@
 //  A BID expires 14 days after it was signed (BID_TTL_MS): the shipper can no longer pick it and the courier sees "Expired" and may bid
 //  again (a new bid is a new signature, so it starts a new 14 days). The bid the shipper accepted is frozen and never expires.
 //
+//  PRIVACY: nothing about a job is readable on a relay (lib/jobseal.js). A request holds an encrypted `box` (the job) and `wraps` (the job key
+//  sealed to the shipper and to each INVITED courier); bids, confirmations (note, how it was checked), payments (amount, mint, token) and the
+//  proof are sealed to the other party. Public: the kinds, who wrote them, who they are addressed to (`p`/`e` tags), when, how big, and the
+//  status words ("requested", "assigned", "closed"; the stage and phase names in the d-tags). Readers below open what the LOGGED-IN person may
+//  open (setDeliveryViewer): the shipper reads everything of their own jobs, a courier what was sealed to them. Old public events still read.
+//
 //  Trust rules: versions of a request = same author + d-tag; only the shipper authors versions, so the courier they name is trustworthy.
 //  A bid counts from anyone except the shipper; an accept, a decline, a confirm and a payment only from the shipper; a stage and a payment
 //  reply only from the assigned courier. A bid whose CDL statement does not meet the request is ignored.
@@ -33,6 +39,8 @@ import { isMintUrl } from "./mints.js";
 import { startCode } from "./startcode.js";
 import { hidesMe } from "./blocks.js";
 import { haversineDistance } from "./geo.js";
+import { newJobKey, sealBox, openBox, wrapKey, unwrapKey } from "./jobseal.js";
+import { MAX_INVITES } from "./couriers.js";
 
 const HOUR = 3600000;
 export const DELIVERY_TTL_MS = 12 * HOUR; // an ASAP request lives 12 h; a timed one until 12 h after its pickup time
@@ -70,18 +78,64 @@ const isHex = (v) => typeof v === "string" && /^[0-9a-f]{64}$/.test(v);
 const intIn = (v, lo, hi) => (typeof v === "number" && Number.isInteger(v) && v >= lo && v <= hi ? v : null);
 const place = (p) => (p && typeof p.lat === "number" && typeof p.lng === "number" ? { name: str(p.name), lat: p.lat, lng: p.lng } : null);
 
+// Whose eyes are these? Every read of a sealed event needs the reader's key, so the logged-in person is set once (AppContext, at login) instead of
+// being passed through every screen. Switching person clears what was worked out for the last one.
+let viewer = null; // { sk, publicKey } | null
+export function setDeliveryViewer(user) {
+  viewer = user?.sk && user?.publicKey ? { sk: user.sk, publicKey: user.publicKey } : null;
+  memo.clear(); memoVersion = -1;
+}
+export const getDeliveryViewer = () => viewer;
+// The OTHER person of a pair, for a sealed message between the shipper and the chosen courier: null when the viewer is neither.
+export function otherParty(request, courier = deliveryCourier(request)) {
+  if (!viewer) return null;
+  if (viewer.publicKey === request.pubkey) return courier || null;
+  return courier && viewer.publicKey === courier ? request.pubkey : null;
+}
+
 // Results are cached until the event cache changes (relay.version), as in lib/rides.js.
 const memo = new Map();
 let memoVersion = -1;
 function cached(key, fn) {
   if (relay.version !== memoVersion) { memo.clear(); memoVersion = relay.version; }
-  if (!memo.has(key)) memo.set(key, fn());
-  return memo.get(key);
+  const k = (viewer ? viewer.publicKey : "-") + "|" + key; // what a person may read is theirs alone
+  if (!memo.has(k)) memo.set(k, fn());
+  return memo.get(k);
 }
 
 // ── The request and its versions ──
 export const deliveryKey = (request) => `${request.pubkey}:${dtagOf(request)}`;
-export const deliveryContent = (request) => parse(request) || {};
+// The request as THIS person can read it: the job (what, places, time, CDL need…) opened from the box when they hold a wrap, plus the public
+// status words. An old request that is plainly public reads as it always did. A request this person cannot open has no `pickup`/`dropoff`.
+export function deliveryContent(request) {
+  return cached("c:" + request.id, () => {
+    const c = parse(request) || {};
+    if (c.v !== 2) return c;
+    const job = openJob(request);
+    return { ...(job || {}), v: 2, status: c.status, ...(c.courierPubkey && { courierPubkey: c.courierPubkey }), ...(c.bidId && { bidId: c.bidId }), sealed: c.sealed };
+  });
+}
+// The job key, if the viewer holds a wrap (any version of the request, newest first), else null.
+function jobKey(request) {
+  if (!viewer) return null;
+  for (const v of deliveryVersions(request)) {
+    const wrap = parse(v)?.wraps?.[viewer.publicKey];
+    if (typeof wrap === "string") { const k = unwrapKey(viewer.sk, request.pubkey, wrap); if (k) return k; }
+  }
+  return null;
+}
+function openJob(request) {
+  const key = jobKey(request);
+  if (!key) return null;
+  const box = deliveryVersions(request).map((v) => parse(v)?.box).find((b) => typeof b === "string");
+  return openBox(key, box);
+}
+// Who the shipper's app invited (they hold a wrap): a Set of pubkeys, the shipper left out.
+export const deliveryInvited = (request) => new Set(Object.keys(parse(deliveryVersions(request)[0] || request)?.wraps || {}).filter((pk) => pk !== request.pubkey));
+// A request is the shipper's own, an invited courier's, or old and public: can this person read it?
+export const isReadable = (request) => !!deliveryContent(request).pickup;
+// When it was FIRST posted (the newest version may be an invitation or a status change, and must not restart the clock).
+export const deliveryCreatedAt = (request) => Math.min(request.created_at, ...deliveryVersions(request).map((e) => e.created_at));
 
 // Every version of one request (same author + d-tag), newest first.
 export function deliveryVersions(request) {
@@ -100,7 +154,7 @@ export function deliveryCourier(request) {
   const c = deliveryVersions(request).map((e) => parse(e)?.courierPubkey).find(isHex);
   return c || null;
 }
-export const deliveryNeed = (request) => normalizeNeed(parse(request)?.cdl);
+export const deliveryNeed = (request) => normalizeNeed(deliveryContent(request).cdl);
 
 export function deliveryExpiryMs(content, createdAtSec) {
   if (content?.time && content.time !== "ASAP") {
@@ -109,11 +163,11 @@ export function deliveryExpiryMs(content, createdAtSec) {
   }
   return createdAtSec * 1000 + DELIVERY_TTL_MS;
 }
-export const isDeliveryExpired = (request, now = Date.now()) => now > deliveryExpiryMs(parse(request), request.created_at);
+export const isDeliveryExpired = (request, now = Date.now()) => now > deliveryExpiryMs(deliveryContent(request), deliveryCreatedAt(request));
 
 // A future delivery (more than 30 minutes away).
 export function isScheduledDelivery(request, now = Date.now()) {
-  const time = parse(request)?.time;
+  const time = deliveryContent(request).time;
   if (!time || time === "ASAP") return false;
   const t = Date.parse(time);
   return !isNaN(t) && t - now > 30 * 60000;
@@ -122,8 +176,14 @@ export function isScheduledDelivery(request, now = Date.now()) {
 // ── Bids ──
 // One valid bid from an event, or null. Whatever a courier signs is checked: numbers, the mint address, the CDL statement.
 export function readBid(e, shipper) {
-  const c = parse(e);
+  let c = parse(e);
   if (!c || e.pubkey === shipper) return null;
+  if (c.v === 2) { // sealed between the courier and the shipper: only those two can read it
+    if (!viewer) return null;
+    const other = viewer.publicKey === shipper ? e.pubkey : viewer.publicKey === e.pubkey ? shipper : null;
+    c = other ? unseal(viewer.sk, other, c.sealed) : null;
+    if (!c || typeof c !== "object") return null;
+  }
   if (e.created_at * 1000 > Date.now() + 10 * 60000) return null; // a bid dated in the future would never run out
   const priceSats = intIn(c.priceSats, 1, 1e9);
   const upfrontPct = c.upfrontPct == null ? DEFAULT_UPFRONT : UPFRONT_CHOICES.includes(c.upfrontPct) ? c.upfrontPct : null;
@@ -226,8 +286,13 @@ export function confirmsOf(request) {
       .filter((e) => onRequest(e, ids))
       .sort((a, b) => a.created_at - b.created_at)
       .forEach((e) => {
-        const c = parse(e);
+        let c = parse(e);
         if (!c || !["pickup", "delivered", "problem"].includes(c.phase) || c.ok !== true && c.phase !== "problem" || out.has(c.phase)) return;
+        if (c.v === 2) { // the note and how it was checked are sealed between the shipper and the courier
+          const other = otherParty(request);
+          const inner = other ? unseal(viewer.sk, other, c.sealed) : null;
+          c = { ...c, ...(inner && typeof inner === "object" ? { note: inner.note, verified: inner.verified } : {}) };
+        }
         out.set(c.phase, { at: e.created_at * 1000, c, event: e });
       });
     return out;
@@ -280,7 +345,7 @@ export function exactDelivery(request, user) {
 export function placesOf(request, user) {
   const ex = exactDelivery(request, user);
   if (ex) return { pickup: ex.pickup, dropoff: ex.dropoff, exact: true, contact: ex.contact };
-  const c = parse(request) || {};
+  const c = deliveryContent(request);
   return { pickup: place(c.pickup) || { name: "Approximate area", lat: 0, lng: 0 }, dropoff: place(c.dropoff) || { name: "Approximate area", lat: 0, lng: 0 }, exact: false, contact: "" };
 }
 
@@ -290,11 +355,11 @@ export function placesOf(request, user) {
 export function openRequestsFor(requests, { me, cdl, blocked = [], near = null, now = Date.now(), distance = null } = {}) {
   const hidden = new Set(blocked.map((b) => b.pubkey));
   return requests
-    .filter((r) => r.pubkey !== me && !hidden.has(r.pubkey))
+    .filter((r) => r.pubkey !== me && !hidden.has(r.pubkey) && isReadable(r)) // a request this courier was not invited to has nothing to show
     .filter((r) => deliveryStatus(r) === "requested" && !isDeliveryExpired(r, now))
-    .filter((r) => !hidesMe(parse(r)?.hide, r.pubkey, me))
+    .filter((r) => !hidesMe(deliveryContent(r).hide, r.pubkey, me))
     .filter((r) => meetsCdl(cdl, deliveryNeed(r)))
-    .map((r) => ({ request: r, miles: near && distance ? distance(near, parse(r)?.pickup) : null }))
+    .map((r) => ({ request: r, miles: near && distance ? distance(near, deliveryContent(r).pickup) : null }))
     .filter((x) => !near || x.miles == null || x.miles <= near.radiusMiles)
     .sort((a, b) => (a.miles ?? 1e9) - (b.miles ?? 1e9) || b.request.created_at - a.request.created_at);
 }
@@ -360,34 +425,65 @@ export function deliveryMiles(requests, pubkey) {
 // ── Building events (the caller publishes them with useApp().publish) ──
 const newId = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 
+// The tags of a request version: its id, the app label, and a `p` for each invited courier (so a courier's own history query finds it).
+const requestTags = (id, wraps, shipper) => [["d", id], ["t", "delivery"], ...Object.keys(wraps || {}).filter((pk) => pk !== shipper).map((pk) => ["p", pk])];
+
 // A new request. `form`: { type, size, note, pickup, dropoff (exact places with `area` names), time, cdl, distanceMiles, durationMin, contact?, hide? }.
-export function requestEvent(user, form) {
+// `invited` = the couriers to send it to (pubkeys; lib/couriers.js eligibleCouriers). The job is encrypted with a fresh job key; the key is sealed to
+// the shipper and to each invited courier. The exact places and the contact note are sealed to the shipper alone.
+export function requestEvent(user, form, invited = []) {
   const id = newId();
   const need = normalizeNeed(form.cdl);
-  const content = {
-    v: 1,
+  const job = {
     what: { type: TYPE_IDS.has(form.type) ? form.type : "package", size: SIZE_IDS.has(form.size) ? form.size : "medium", note: str(form.note, MAX_NOTE) },
     pickup: publicPlace(form.pickup), dropoff: publicPlace(form.dropoff),
     time: form.time && form.time !== "ASAP" && !isNaN(Date.parse(form.time)) ? new Date(form.time).toISOString() : "ASAP",
     cdl: need,
     distanceMiles: Math.round((Number(form.distanceMiles) || 0) * 10) / 10, durationMin: Math.round(Number(form.durationMin) || 0),
     ...(form.hide?.length && { hide: form.hide }),
-    status: "requested",
+  };
+  const key = newJobKey();
+  const wraps = { [user.publicKey]: wrapKey(user.sk, user.publicKey, key) };
+  for (const pk of [...new Set(invited)].filter((p) => isHex(p) && p !== user.publicKey).slice(0, MAX_INVITES)) wraps[pk] = wrapKey(user.sk, pk, key);
+  const content = {
+    v: 2, status: "requested", box: sealBox(key, job), wraps,
     sealed: seal(user.sk, user.publicKey, { pickup: { name: form.pickup.name, lat: form.pickup.lat, lng: form.pickup.lng }, dropoff: { name: form.dropoff.name, lat: form.dropoff.lat, lng: form.dropoff.lng }, contact: str(form.contact, 200) }),
   };
-  return { kind: K.DELIVERY_REQUEST, content, tags: [["d", id], ["t", "delivery"]] };
+  return { kind: K.DELIVERY_REQUEST, content, tags: requestTags(id, wraps, user.publicKey) };
 }
 
 // A new version of a request (same d-tag), with a patch of its content: { status: "closed" } or { status: "assigned", courierPubkey, bidId }.
+// It starts from the NEWEST version, so the box, the wraps and the sealed places are carried along.
 export function versionEvent(request, patch) {
-  return { kind: K.DELIVERY_REQUEST, content: { ...(parse(request) || {}), ...patch }, tags: [["d", dtagOf(request)], ["t", "delivery"]] };
+  const latest = deliveryVersions(request)[0] || request;
+  const content = { ...(parse(latest) || {}), ...patch };
+  return { kind: K.DELIVERY_REQUEST, content, tags: requestTags(dtagOf(request), content.wraps, request.pubkey) };
 }
 
+// Invite more couriers to an open request: a new version with their wraps added (the shipper's app opens its own wrap to get the job key).
+// null when there is nothing to add, or the key cannot be opened (not the shipper's request).
+export function inviteEvent(request, user, couriers) {
+  if (request.pubkey !== user.publicKey) return null;
+  const latest = deliveryVersions(request)[0] || request;
+  const c = parse(latest);
+  if (!c || c.v !== 2 || c.status !== "requested") return null;
+  const key = unwrapKey(user.sk, user.publicKey, c.wraps?.[user.publicKey]);
+  if (!key) return null;
+  const wraps = { ...c.wraps };
+  const room = MAX_INVITES + 1 - Object.keys(wraps).length;
+  const add = [...new Set(couriers)].filter((p) => isHex(p) && !wraps[p] && p !== user.publicKey).slice(0, Math.max(0, room));
+  if (!add.length) return null;
+  for (const pk of add) wraps[pk] = wrapKey(user.sk, pk, key);
+  return versionEvent(request, { wraps });
+}
+
+// A bid is sealed between the courier and the shipper (price, minutes, notes, CDL, vehicle, mint, share paid at pickup): relays and other couriers see only that a bid exists.
 export function bidEvent(request, user, { priceSats, etaMinutes, note, cdl, vehicle, mint, upfrontPct = DEFAULT_UPFRONT, withdrawn = false }) {
   const latest = deliveryVersions(request)[0] || request;
+  const body = { priceSats, etaMinutes, note: str(note, MAX_NOTE), cdl: normalizeCdl(cdl), vehicle: str(vehicle, 80), mint, upfrontPct, ...(withdrawn && { withdrawn: true }) };
   return {
     kind: K.DELIVERY_BID,
-    content: { priceSats, etaMinutes, note: str(note, MAX_NOTE), cdl: normalizeCdl(cdl), vehicle: str(vehicle, 80), mint, upfrontPct, ...(withdrawn && { withdrawn: true }) },
+    content: { v: 2, sealed: seal(user.sk, request.pubkey, body) },
     tags: [["e", latest.id], ["p", request.pubkey], ["d", `bid-${deliveryKey(request)}`], ["t", "delivery"]],
   };
 }
@@ -424,12 +520,13 @@ export function stageEvent(request, user, stage, { photo = "", fix = null } = {}
   };
 }
 
-// `verified` (phase "delivered" only): how the shipper checked it, one of VERIFIED_HOW.
-export function confirmEvent(request, courierPubkey, phase, { ok = true, note = "", verified = "" } = {}) {
+// `verified` (phase "delivered" only): how the shipper checked it, one of VERIFIED_HOW. The note and `verified` are sealed to the courier.
+export function confirmEvent(request, courierPubkey, phase, { ok = true, note = "", verified = "" } = {}, user = viewer) {
   const latest = deliveryVersions(request)[0] || request;
+  const inner = { note: str(note, 300), ...(phase === "delivered" && VERIFIED_HOW.includes(verified) && { verified }) };
   return {
     kind: K.DELIVERY_CONFIRM,
-    content: { phase, ok, note: str(note, 300), at: Date.now(), ...(phase === "delivered" && VERIFIED_HOW.includes(verified) && { verified }) },
+    content: { v: 2, phase, ok, at: Date.now(), sealed: seal(user.sk, courierPubkey, inner) },
     tags: [["e", latest.id], ["p", courierPubkey], ["d", `confirm-${deliveryKey(request)}-${phase}`], ["t", "delivery"]],
   };
 }

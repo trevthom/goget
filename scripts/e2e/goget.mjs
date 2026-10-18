@@ -4,7 +4,8 @@
 //   • Courier: Account → Courier details (a CDL box with endorsements, what the courier drives); a courier without the CDL does NOT see the request
 //   • two couriers bid (a price, minutes, notes, the CDL on the bid); the shipper's Bids tab shows a number and both bids
 //   • accepting one bid declines the other; the shipper types the 4-digit code from the courier's phone; the pickup share is paid
-//   • the courier marks it delivered near the drop-off (with a photo); the shipper confirms; the rest is paid; earnings show it
+//   • the courier marks it delivered near the drop-off (a photo AND the GPS fix are the proof; the shipper's card shows both checks); the shipper confirms; the rest is paid; earnings show it
+//   • the request is ENCRYPTED: only couriers invited by the shipper's app (they were online near the pickup and meet the CDL need) can read it, and no relay holds a detail
 //   • the first time in Shipping a notice says what you send is your responsibility; it never comes back
 //   • each person switches context in Account (Passenger and Taxi Driver are the NostrRide rider and driver screens)
 // Takes about two minutes.
@@ -184,13 +185,16 @@ try {
   await step("Bob gets to the drop-off, adds a photo, marks it delivered; Alice sees the photo and confirms; the rest is paid", async () => {
     await B.getByText(/Take it to the drop-off/).waitFor({ timeout: 20000 });
     if (!(await B.getByRole("button", { name: "Mark delivered" }).isDisabled())) throw new Error("Mark delivered must be locked away from the drop-off");
-    await Bctx.setGeolocation({ latitude: DEST.lat, longitude: DEST.lng, accuracy: 10 });
-    for (let i = 0; i < 60 && (await B.getByRole("button", { name: "Mark delivered" }).isDisabled()); i++) await sleep(500);
     await B.getByLabel("Photo of the delivered parcel").setInputFiles({ name: "p.png", mimeType: "image/png", buffer: PNG });
     await B.getByAltText("Your photo").waitFor({ timeout: 10000 });
+    if (!(await B.getByRole("button", { name: "Mark delivered" }).isDisabled())) throw new Error("Mark delivered must stay locked away from the drop-off, photo or not");
+    await Bctx.setGeolocation({ latitude: DEST.lat, longitude: DEST.lng, accuracy: 10 });
+    for (let i = 0; i < 60 && (await B.getByRole("button", { name: "Mark delivered" }).isDisabled()); i++) await sleep(500);
     await B.getByRole("button", { name: "Mark delivered" }).click();
     await B.getByRole("button", { name: "Yes, delivered" }).click();
     await A.getByAltText("Photo from the courier at the drop-off").waitFor({ timeout: 40000 });
+    const proof = await A.getByTestId("proof-card").innerText(); // the proof of delivery: the photo and a signed GPS fix, checked against the drop-off
+    if (!/Photo from/.test(proof) || !/Location signed \d+ m from the drop-off/.test(proof)) throw new Error("the proof card should show both checks: " + proof.replace(/\s+/g, " "));
     await A.getByRole("button", { name: /Parcel received/ }).click();
     await A.getByRole("button", { name: "Yes, pay the courier" }).click();
     await A.getByText("Delivered and paid").waitFor({ timeout: 20000 });
@@ -205,6 +209,15 @@ try {
       await sleep(500);
     }
     throw new Error("Bob's earnings are not the full price: " + (await B.locator("body").innerText({ timeout: 2000 }).catch(() => "?")).replace(/\s+/g, " ").slice(0, 300));
+  });
+
+  await step("profile: Bob's Account shows the delivery he carried (a count and miles)", async () => {
+    await Bctx.setGeolocation({ latitude: PICKUP.lat, longitude: PICKUP.lng, accuracy: 10 });
+    await goTab(B, "Account");
+    await B.getByTestId("profile-stats").waitFor({ timeout: 10000 });
+    for (let i = 0; i < 20 && !/1 delivery · [\d.]+ mi driven/.test(await B.getByTestId("profile-stats").innerText()); i++) await sleep(500);
+    const t = await B.getByTestId("profile-stats").innerText();
+    if (!/1 delivery · [\d.]+ mi driven/.test(t)) throw new Error("expected '1 delivery · N mi driven', got: " + t);
   });
 
   await step("a second delivery for LATER, using a recent place; couriers without a CDL need can see it", async () => {
@@ -238,6 +251,16 @@ try {
     await h.login(A, alice, h.gogetUrl);
     await tabs(A).getByText("Deliveries", { exact: true }).waitFor({ timeout: 60000 });
     if (await A.getByTestId("notice-shipping").count()) throw new Error("the shipping notice must show only once");
+  });
+
+  await step("privacy: no relay holds a detail of the job (what, places, notes, prices, the proof, the payments)", async () => {
+    const wire = h.relay.events.filter((e) => e.kind >= 30103 && e.kind <= 30110).map((e) => e.content).join("\n");
+    if (wire.length < 500) throw new Error("expected the delivery events on the relay");
+    const backups = h.relay.events.filter((e) => e.kind === 30112).map((e) => e.content).join("\n");
+    for (const word of ["blocked", "goget_context", "courier", "shipper", "currency"]) if (backups.includes(word)) throw new Error(`the backup shows "${word}" on the relay`);
+    for (const secret of ["Pallet jack", "Ask for Sam", "Needs a lift gate", "lift gate and straps", "Van only", "16 ft box truck", "100 Main St", "Blue Grass", "cashuB", "gps+photo", "Downtown", "equipment"]) {
+      if (wire.includes(secret)) throw new Error(`"${secret}" is readable on the relay`);
+    }
   });
 
   const unstyled = await h.missingStyles(A, "goget");

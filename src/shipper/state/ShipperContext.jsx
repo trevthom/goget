@@ -8,6 +8,8 @@
 //    declineBid()      turn one bid down; closeRequest() close a request nobody took
 //    confirmPickup()   type the 4-digit code shown on the courier's phone → the parcel changed hands, the pickup share is paid
 //    confirmDelivered(request, how) / reportProblem()   the parcel arrived (the rest is paid; `how` = "gps+photo" or "outside": verified outside of GoGet) / it did not, or is damaged
+//  Invitations: a request is encrypted (lib/jobseal.js), so couriers cannot browse it. The app invites the couriers who are available (their
+//  public presence, lib/couriers.js) when the request is posted AND every 20 s while it is open, as new couriers come online. Keep the app open.
 //  A timer (every 3 s) pays what is due (features/payments/payDelivery.js) and keeps the screen awake while a delivery runs.
 // ════════════════════════════════════════════════════════════
 
@@ -20,7 +22,10 @@ import { haversineDistance } from "../../lib/geo.js";
 import { getDrivingRoute, metersToMiles } from "../../lib/routing.js";
 import { hideList } from "../../lib/blocks.js";
 import { attemptGate, recordAttempt, checkCode } from "../../lib/startcode.js";
-import { acceptEvents, bidInbox, confirmEvent, declineBidEvent, deliveriesOf, deliveryCourier, deliveryStatus, exactDelivery, isBidExpired, isRunning, pickupCode, requestEvent, versionEvent } from "../../lib/delivery.js";
+import { acceptEvents, bidInbox, confirmEvent, declineBidEvent, deliveriesOf, deliveryCourier, deliveryInvited, deliveryNeed, deliveryStatus, exactDelivery, inviteEvent, isBidExpired, isDeliveryExpired, isRunning, pickupCode, requestEvent, versionEvent } from "../../lib/delivery.js";
+import { eligibleCouriers } from "../../lib/couriers.js";
+import { subscribeCourierPresence } from "../../nostr/live.js";
+import { normalizeNeed } from "../../lib/cdl.js";
 import { neededToAccept, dueNow } from "../../lib/deliveryPay.js";
 import { payDelivery } from "../../features/payments/payDelivery.js";
 import { moneyText } from "../../ui/Money.jsx";
@@ -48,6 +53,11 @@ export function ShipperProvider({ children }) {
     reverseGeocode(myPosition.lat, myPosition.lng).then((p) => alive && setHere(p || fallback)).catch(() => alive && setHere(fallback));
     return () => { alive = false; };
   }, [myPosition?.lat, myPosition?.lng]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Who is available (public presence): the couriers a new request can be sent to.
+  const couriersRef = useRef([]);
+  const [couriersTick, setCouriersTick] = useState(0);
+  useEffect(() => subscribeCourierPresence((list) => { couriersRef.current = list; setCouriersTick((t) => t + 1); }, { excludePubkey: me }), [me]);
 
   // ── The delivery being planned ──
   const [draft, setDraftState] = useState(EMPTY_DRAFT);
@@ -89,19 +99,46 @@ export function ShipperProvider({ children }) {
       const r = await getDrivingRoute([d.pickup, d.dropoff]);
       if (r) { miles = metersToMiles(r.distanceMeters); minutes = r.durationSeconds / 60; }
     } catch { /* keep the guess */ }
+    const need = normalizeNeed({ required: d.cdlRequired, endorsements: d.endorsements });
+    const invited = eligibleCouriers(couriersRef.current, { pickup: d.pickup, need, me, blocked }).map((x) => x.courier);
     const ev = requestEvent(user, {
       type: d.type, size: d.size, note: d.note.trim(), pickup: d.pickup, dropoff: d.dropoff, time: d.when,
-      cdl: { required: d.cdlRequired, endorsements: d.endorsements }, distanceMiles: miles, durationMin: minutes, contact: d.contact.trim(),
+      cdl: need, distanceMiles: miles, durationMin: minutes, contact: d.contact.trim(),
       hide: hideList(me, blocked),
-    });
+    }, invited);
     const ok = await publish(ev.kind, ev.content, ev.tags);
     setPosting(false);
     resetDraft();
     refreshData();
-    pushNotice(ok ? "Posted. Couriers near you can bid now." : "Saved here. It will be sent as soon as a relay answers.");
+    pushNotice(!ok ? "Saved here. It will be sent as soon as a relay answers." : invited.length ? `Posted. Sent to ${invited.length} courier${invited.length === 1 ? "" : "s"} near you.` : "Posted. No courier is online near the pickup yet. Keep GoGet open: couriers are invited as they come online.");
     setView("deliveries");
     return true;
   }, [draft, posting, user, me, blocked, publish, pushNotice, refreshData, resetDraft, setView]);
+
+  // ── Invite couriers who come online later (every 20 s and when the list of available couriers changes) ──
+  const inviteLatest = useRef({});
+  inviteLatest.current = { mine, user, blocked, publish };
+  useEffect(() => {
+    let busy = false;
+    const run = async () => {
+      if (busy) return;
+      busy = true;
+      try {
+        const { mine: list, user: u, blocked: bl, publish: pub } = inviteLatest.current;
+        for (const request of list) {
+          if (deliveryStatus(request) !== "requested" || isDeliveryExpired(request)) continue;
+          const ex = exactDelivery(request, u);
+          if (!ex) continue;
+          const add = eligibleCouriers(couriersRef.current, { pickup: ex.pickup, need: deliveryNeed(request), me: u.publicKey, blocked: bl, wrapped: deliveryInvited(request) });
+          const ev = add.length ? inviteEvent(request, u, add.map((x) => x.courier)) : null;
+          if (ev) await pub(ev.kind, ev.content, ev.tags);
+        }
+      } finally { busy = false; }
+    };
+    run();
+    const id = setInterval(run, 20000);
+    return () => clearInterval(id);
+  }, [couriersTick]);
 
   // ── Bids ──
   // How much ecash I hold at a bid's mint, and what it takes to accept it.
@@ -142,22 +179,22 @@ export function ShipperProvider({ children }) {
     const ok = checkCode(typed, pickupCode(user.sk, courier, request));
     setTries((t) => ({ ...t, [request.id]: recordAttempt(tries[request.id], ok, Date.now()) }));
     if (!ok) return { ok: false, message: "That code is not right. Ask the courier to read it again." };
-    const ev = confirmEvent(request, courier, "pickup");
+    const ev = confirmEvent(request, courier, "pickup", {}, user);
     await publish(ev.kind, ev.content, ev.tags);
     refreshData();
     return { ok: true };
   }, [tries, user, publish, refreshData]);
   // `verified`: "gps+photo" (the courier's proof held up) or "outside" (the shipper checked it outside of GoGet).
   const confirmDelivered = useCallback(async (request, verified = "outside") => {
-    const ev = confirmEvent(request, deliveryCourier(request), "delivered", { verified });
+    const ev = confirmEvent(request, deliveryCourier(request), "delivered", { verified }, user);
     await publish(ev.kind, ev.content, ev.tags);
     refreshData();
-  }, [publish, refreshData]);
+  }, [user, publish, refreshData]);
   const reportProblem = useCallback(async (request, note) => {
-    const ev = confirmEvent(request, deliveryCourier(request), "problem", { ok: false, note });
+    const ev = confirmEvent(request, deliveryCourier(request), "problem", { ok: false, note }, user);
     await publish(ev.kind, ev.content, ev.tags);
     refreshData();
-  }, [publish, refreshData]);
+  }, [user, publish, refreshData]);
 
   // ── Pay what is due, every 3 s and when something changes ──
   const [payState, setPayState] = useState({}); // delivery id → the last payDelivery result

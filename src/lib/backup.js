@@ -27,7 +27,7 @@ export const MAX_BACKUP_CHARS = 90000; // relays refuse big events; the sealed t
 const HEX64 = /^[0-9a-f]{64}$/;
 
 // Setting keys every account has, and the key families that carry the account's own 16-character key id at the end.
-const EXACT = ["blocked", "genderPref", "requestAlerts", "requestRadius", "courierRadius", "currency", "amountUnit", "trustedContacts", "ecashMint", "dark", "relays"];
+const EXACT = ["blocked", "genderPref", "requestAlerts", "requestRadius", "courierRadius", "courierAvailable", "currency", "amountUnit", "trustedContacts", "ecashMint", "dark", "relays"];
 const PER_ACCOUNT = ["autoCashOut_", "goget_context_", "notice_"];
 const id16 = (pubkey) => String(pubkey || "").slice(0, 16);
 
@@ -49,7 +49,7 @@ export function cleanValue(key, v) {
       return v.filter((b) => b && HEX64.test(b.pubkey || "")).slice(-500).map((b) => ({ pubkey: b.pubkey, name: text(b.name, 60), at: isNum(b.at, 0, 4e12) ? b.at : 0 }));
     }
     case key === "genderPref": return v === "" || v === "male" || v === "female" ? v : undefined;
-    case key === "requestAlerts" || key === "dark": return typeof v === "boolean" ? v : undefined;
+    case key === "requestAlerts" || key === "dark" || key === "courierAvailable": return typeof v === "boolean" ? v : undefined;
     case key === "requestRadius" || key === "courierRadius": return isNum(v, 1, 1000) ? v : undefined;
     case key === "currency": return isCurrency(v) ? v : undefined;
     case key === "amountUnit": return v === "fiat" || v === "sats" ? v : undefined;

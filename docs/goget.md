@@ -86,12 +86,14 @@ The first time you open Shipping, GoGet shows a one-time notice: **you are respo
 ### Post a delivery (Ship tab)
 1. **What are you sending?** Document, Package, Large equipment, or Something else.
 2. **How big is it?** Small (fits in a bag), Medium (a box), Large (needs a van or truck), Oversize / heavy (needs a flatbed, trailer or equipment).
-3. **Tell couriers about it.** Weight, what it is, anything special. Couriers near you can read this. Leave out private details.
+3. **Tell couriers about it.** Weight, what it is, anything special. Only the couriers GoGet sends the request to (see below) can read this. Still, leave out private details.
 4. **Where?** Choose the pickup and the drop-off. Type an address or a business name, or pin the spot on the map. The search shows your three most recent pickups and drop-offs.
 5. **When?** *As soon as possible*, or *Later* with a date and time (up to 90 days ahead).
-6. **Does the courier need a CDL?** Tick the box, and pick the endorsements the courier must hold: H (hazmat), N (tank), P (passengers), S (school bus), T (double/triple trailers), X (tank + hazmat). A courier who does not have them **never sees your request**.
+6. **Does the courier need a CDL?** Tick the box, and pick the endorsements the courier must hold: H (hazmat), N (tank), P (passengers), S (school bus), T (double/triple trailers), X (tank + hazmat). A courier who does not have them is **never sent your request**.
 7. **Who should the courier ask for?** An optional note: a name, a phone number, a gate code. Only the courier you choose can read it.
 8. Tap **Post delivery request**.
+
+**Your request is encrypted.** A relay holds only noise. GoGet sends it to the couriers who are *available* (online, with "Receive new jobs" on) near your pickup, inside the distance each courier chose, and who meet your CDL need. Each of those couriers gets a key for your request, sealed to them. GoGet keeps inviting couriers as they come online, so **keep GoGet open while you wait for bids**. If nobody is online near you, it tells you and your request waits. The Deliveries tab says how many couriers got it.
 
 A request stays open for 12 hours (ASAP), or until 12 hours after the pickup time (later). Nobody takes it? It expires by itself.
 
@@ -125,6 +127,7 @@ This is your own statement. GoGet does not check it. If you say you hold somethi
 
 ### Jobs tab
 Open delivery requests near you. Nearest first. You choose how far: 10, 25, 50 or 100 miles. Requests that need a CDL or an endorsement you did not list are **not shown at all**. Your own requests and requests from people you blocked are hidden.
+Under **Receive new jobs** (top of the tab) you say whether shippers near you may send you requests. It shares your area (about 1 km), your distance and your CDL statement, the same way a taxi driver's car shows on the map. Turn it off and no new request is sent to you; the ones you already have stay. A request is encrypted, so you see it only if a shipper's GoGet sent it to you.
 Tap a request to read it and bid:
 - **Your price** — in your currency or in sats.
 - **Minutes until you can be at the pickup.**
@@ -189,13 +192,22 @@ GoGet is permissionless and unregulated. That is the point. It also means **you 
 
 ## 10. Privacy
 
-- The public part of a delivery request names only the **area** of the pickup and the drop-off (about 1 km). The **exact addresses and your contact note are sealed** (encrypted) to you, and are sent to the courier only after you accept that courier's bid.
-- The **description** you write is public to couriers near you. Leave out private details.
-- The courier's **live position** is encrypted and goes only to the shipper of that job.
-- The **proof of delivery** (the photo and the courier's GPS location) is encrypted to the shipper.
-- Payments are sealed to the person being paid. The *amount* is public, the token is not.
-- Relays are public. Anyone who runs one can see the public parts and who talks to whom (not what is sealed).
-- Your **recovery words** and **secret key** never leave your device.
+**A job is encrypted. Relays cannot read what is in it.**
+- A **delivery request** is encrypted with a one-time key. GoGet seals that key to you and to each courier it invites. A relay sees a block of noise, who was invited, and when. It does not see what the parcel is, its size, your note, the places (not even the area), the time, the distance, or the CDL you ask for.
+- Only invited couriers can read the request, and they see only the **approximate area** (about 1 km). The **exact addresses and your contact note are sealed** to you, and are sent to the **one courier you choose**, after you accept that courier's bid.
+- A **bid** (price, minutes, notes, CDL, vehicle, mint) is sealed between the courier and you. Other couriers cannot see it, so nobody sees a competitor's price.
+- **Payments** are sealed to the person being paid: the amount, the mint and the token. Replies are sealed too. Your **note** on a problem, and how you checked a delivery, are sealed to the courier.
+- The courier's **live position** is encrypted and goes only to the shipper of that job. The **proof of delivery** (the photo and the courier's GPS location) is encrypted to the shipper.
+
+**What is still public**, because relays need it to pass messages on:
+- That an event happened, its type, who wrote it, who it is addressed to (so who was invited, who bid, who was chosen), when, and how big it is.
+- The status words: *requested*, *assigned*, *closed*, and the stage and phase names (*pickup*, *delivered*, *problem*). That is why a profile can show how many deliveries a courier finished.
+- A courier's **availability** (a place about 1 km wide, a distance and a CDL statement) while *Receive new jobs* is on.
+- Your vouch list, and CDL vouches you give.
+- Taxi rides stay as before: their approximate places and fares are public; exact places and plates are sealed.
+
+- Relays are public. Anyone who runs one can read what is public and see who talks to whom.
+- Your **recovery words** and **secret key** never leave your device. Your backup (blocks and settings) is encrypted with your secret key.
 
 ---
 
