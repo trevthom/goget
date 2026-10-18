@@ -20,12 +20,14 @@ import { currentLedger, ledgerSummary } from "../../lib/ridemoney.js";
 import { rideDriver } from "../../lib/rides.js";
 import { tickEvent, ticksOf, sentSats, forgivenSats } from "../../lib/payments.js";
 import { dueSats } from "../../lib/ticks.js";
+import { recoverRefused } from "./recoverRefused.js";
 
 export const MIN_TICK_SATS = 3; // below this the difference is just a mint fee; it is paid with the next tick
 const busy = new Set(); // ride keys with a payment in flight (one at a time, so a tick is never paid twice)
 
 export async function payDue({ request, user, ecash, publish, terms, mint, price, nowMs = Date.now(), miles }) {
   const driver = rideDriver(request);
+  recoverRefused({ request, user, ecash, nowMs }).catch(() => {}); // a "refused" tick is checked at the mint, in the background; it is paid again only if the token came back
   const ledger = currentLedger(request, { terms, price, nowMs, miles, role: "rider" });
   const sum = ledgerSummary(request, ledger);
   const base = { ...sum, ledger };

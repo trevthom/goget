@@ -94,7 +94,7 @@ const verdict = Pay.tickReplies(ride).get(evilEv.id);
 assert.equal(verdict.ok, false, "a replayed token is refused");
 assert.match(verdict.reason, /already used for another payment/);
 assert.equal(Pay.paidSats(ride), Pay.ticksOf(ride).filter((t) => t.id !== evilEv.id).reduce((s, t) => s + (Pay.tickReplies(ride).get(t.id)?.ok ? t.amountSats : 0), 0), "and it adds nothing to what is paid");
-assert.equal(Pay.sentSats(ride), Pay.ticksOf(ride).filter((t) => t.id !== evilEv.id).reduce((s, t) => s + t.amountSats, 0), "a refused tick does not count as sent either");
+assert.equal(Pay.sentSats(ride), Pay.ticksOf(ride).reduce((s, t) => s + t.amountSats, 0), "a refused tick still counts as sent: the driver's word is not enough to make the rider pay it again (test/refusal.test.mjs)");
 
 // ── 5. A short wallet: partial payment now, the rest caught up after a top-up ──
 const poor = build(net);
