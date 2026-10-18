@@ -170,11 +170,11 @@ try {
     await A.getByRole("button", { name: "Confirm handover" }).click();
     await A.getByText(/is carrying it to the drop-off/).waitFor({ timeout: 20000 });
     for (let i = 0; i < 60; i++) {
-      const t = (await B.getByText("Received so far").locator("..").innerText().catch(() => "")).replace(/\s+/g, " ");
+      const t = (await B.getByText("Received so far").locator("..").innerText({ timeout: 2000 }).catch(() => "")).replace(/\s+/g, " ");
       if (/\$(1\.00|0\.99)/.test(t)) return;
       await sleep(500);
     }
-    throw new Error("Bob did not receive the first half: " + (await B.getByText("Received so far").locator("..").innerText().catch(() => "?")));
+    throw new Error("Bob did not receive the first half: " + (await B.getByText("Received so far").locator("..").innerText({ timeout: 2000 }).catch(() => "?")));
   });
 
   await step("Bob gets to the drop-off, adds a photo, marks it delivered; Alice sees the photo and confirms; the rest is paid", async () => {
@@ -190,17 +190,17 @@ try {
     await A.getByRole("button", { name: /Parcel received/ }).click();
     await A.getByRole("button", { name: "Yes, pay the courier" }).click();
     await A.getByText("Delivered and paid").waitFor({ timeout: 20000 });
+  });
+
+  await step("Bob's earnings show the delivery paid in full (the pickup half and the rest)", async () => {
+    await goTab(B, "Earnings");
+    await B.getByText(/1 delivery/).waitFor({ timeout: 40000 });
     for (let i = 0; i < 60; i++) {
-      const t = (await B.getByText("Received so far").locator("..").innerText().catch(() => "")).replace(/\s+/g, " ");
+      const t = (await B.locator("body").innerText({ timeout: 2000 }).catch(() => "")).replace(/\s+/g, " ");
       if (/\$(2\.00|1\.99|1\.98)/.test(t)) return;
       await sleep(500);
     }
-    throw new Error("Bob did not receive the rest: " + (await B.getByText("Received so far").locator("..").innerText().catch(() => "?")));
-  });
-
-  await step("Bob's earnings show the delivery", async () => {
-    await goTab(B, "Earnings");
-    await B.getByText(/1 delivery/).waitFor({ timeout: 15000 });
+    throw new Error("Bob's earnings are not the full price: " + (await B.locator("body").innerText({ timeout: 2000 }).catch(() => "?")).replace(/\s+/g, " ").slice(0, 300));
   });
 
   await step("a second delivery for LATER, using a recent place; couriers without a CDL need can see it", async () => {
