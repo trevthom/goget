@@ -266,6 +266,15 @@ try {
     log("     driver wallet:", w.slice(0, 100));
   });
 
+  await step("the relay holds no readable job event: only gift wraps (kind 1059)", async () => {
+    const sealed = new Set([30078, 30079, 30080, 30081, 30084, 30085, 30086, 30087, 30093, 30094, 30095, 30096, 30097, 30098, 30099, 30100, 30101, 30103, 30104, 30105, 30106, 30107, 30108, 30109, 30110]);
+    const leaked = h.relay.events.filter((e) => sealed.has(e.kind));
+    const wraps = h.relay.events.filter((e) => e.kind === 1059);
+    if (leaked.length) throw new Error(`relay holds ${leaked.length} readable job events (kinds ${[...new Set(leaked.map((e) => e.kind))]})`);
+    if (wraps.length < 10) throw new Error(`only ${wraps.length} wraps on the relay`);
+    log("     wraps on the relay:", wraps.length);
+  });
+
   for (const [n, p, role] of [["R", R, "rider"]]) { const u = await h.missingStyles(p, role); log("class names on screen with no CSS rule (R):", u.length ? u.join(" ") : "none"); }
   for (const [n, p, role] of [["D", D, "driver"]]) { const u = await h.missingStyles(p, role); log("class names on screen with no CSS rule (D):", u.length ? u.join(" ") : "none"); }
   log("errors:", h.errors.length ? h.errors : "none");

@@ -140,18 +140,19 @@ try {
   await step("logging out closes the request that is still waiting", async () => {
     // D4 was turned down, so use D1's list again after the rider asks again? Simpler: the rider's request is still open for D1-less drivers.
     // Make sure someone can see it first: D3/D2 cannot, D4 and D1 were declined, so check the request on the RIDER side, then log out.
+    const wrapsBefore = h.relay.events.filter((e) => e.kind === 1059).length;
     await tap(tabs(R).getByText("Account", { exact: true }));
     await tap(R.getByRole("button", { name: /Log out/ }).first());
     await R.getByText(/Any ride request still waiting for a driver/).waitFor({ timeout: 5000 });
     await tap(R.getByRole("button", { name: "Log out" }).last());
     await R.getByText(/I have a key|Create account/).first().waitFor({ timeout: 15000 });
-    // The request is closed on the relay: its newest version says closed, and a finish event exists.
+    // The closing events (a finish and a closed version) are sealed now: the relay shows only new gift wraps.
     let closed = false;
     for (let i = 0; i < 40 && !closed; i++) {
-      closed = h.relay.events.some((e) => e.kind === 30081) && h.relay.events.filter((e) => e.kind === 30078).some((e) => { try { return JSON.parse(e.content).status === "closed"; } catch { return false; } });
+      closed = h.relay.events.filter((e) => e.kind === 1059).length >= wrapsBefore + 2;
       if (!closed) await sleep(250);
     }
-    if (!closed) throw new Error("no closing events reached the relay when the rider logged out");
+    if (!closed) throw new Error("no closing wraps reached the relay when the rider logged out");
   });
 
   for (const [n, p, role] of [["R", R, "rider"]]) { const u = await h.missingStyles(p, role); log("class names on screen with no CSS rule (R):", u.length ? u.join(" ") : "none"); }
