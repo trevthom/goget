@@ -96,7 +96,7 @@ Your deliveries, running ones first. Tap one to open it:
 - **Waiting for bids** — see the bids, or close the request. Nothing was charged.
 - **Courier on the way** — you see the courier on the map. When the courier takes the parcel, ask for the **4-digit code on the courier's phone** and type it. That tells GoGet the parcel changed hands, and the *pickup share* is paid.
 - **On its way** — you see the courier on the map.
-- **Delivered** — you see the courier's photo and how far from the drop-off it was taken. Tap **Parcel received** to pay the rest, or **Report a problem**.
+- **Delivered** — you see the courier's **proof of delivery**: a photo, and a GPS location the courier's phone signed. GoGet checks the location against your drop-off (within 300 m, a good and fresh fix) and shows two ticks. With both ticks, tap **Parcel received** to pay the rest. If the proof is missing or does not match, the button reads **I verified it outside of GoGet**: use it only if you checked in another way (a call, a signature, you were there). Or tap **Report a problem**.
 - **Completed**, **Closed**, **Expired** — the end states. *Post it again* fills the form with the same details.
 
 ---
@@ -128,7 +128,7 @@ You can change your bid or take it back until the shipper chooses.
 1. Open the job. You now see the **exact addresses** and the shipper's note. *Open in a maps app* starts navigation.
 2. At the pickup, show the **4-digit code** on your screen. The shipper types it. You type nothing. The pickup share is paid to you at once.
 3. Drive to the drop-off. GoGet sends your position, encrypted, to the shipper only.
-4. At the drop-off (within 300 m, with a good GPS fix), tap **Mark delivered**. You can add a photo of the parcel. The photo is sealed so only the shipper can see it.
+4. At the drop-off (within 300 m, with a good GPS fix), take a **photo** of the parcel and tap **Mark delivered**. The photo and your GPS location are the *proof of delivery*. Both are sealed so only the shipper can read them. No camera? You can send your location alone; then the shipper must verify the delivery outside of GoGet.
 5. The shipper confirms. The rest is paid to you.
 You can **withdraw** before the pickup. Nothing is charged, and the shipper is told. After the parcel changed hands, you cannot drop the job.
 
@@ -176,7 +176,7 @@ GoGet is permissionless and unregulated. That is the point. It also means **you 
 - The public part of a delivery request names only the **area** of the pickup and the drop-off (about 1 km). The **exact addresses and your contact note are sealed** (encrypted) to you, and are sent to the courier only after you accept that courier's bid.
 - The **description** you write is public to couriers near you. Leave out private details.
 - The courier's **live position** is encrypted and goes only to the shipper of that job.
-- The **photo** of a delivery is encrypted to the shipper.
+- The **proof of delivery** (the photo and the courier's GPS location) is encrypted to the shipper.
 - Payments are sealed to the person being paid. The *amount* is public, the token is not.
 - Relays are public. Anyone who runs one can see the public parts and who talks to whom (not what is sealed).
 - Your **recovery words** and **secret key** never leave your device.
@@ -196,7 +196,7 @@ GoGet is permissionless and unregulated. That is the point. It also means **you 
 
 - No in-app chat or calls. Use *Contact methods*.
 - No push notifications while the app is closed. Open the app to see new bids and jobs.
-- No insurance, proof of delivery beyond a photo and the shipper's confirmation, or dispute service.
+- No insurance or dispute service. Proof of delivery is a photo plus a signed GPS location, and the shipper decides; a phone's GPS can be faked, so GoGet shows the proof but does not guarantee it.
 - No multiple-parcel loads, pallets with several drop-offs, or recurring deliveries.
 - No tips for couriers in this version.
 - A courier cannot see the shipper's earlier deliveries, only the shipper's vouch badge.

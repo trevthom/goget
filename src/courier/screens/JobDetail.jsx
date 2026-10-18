@@ -2,7 +2,8 @@
 //  JOB DETAIL (Courier) — One delivery the shipper gave this courier, over a map:
 //    go to the pickup   the exact addresses and the shipper's note (readable only now), a link to open them in a maps app, and the
 //                       4-DIGIT CODE on this phone: the shipper types it when the parcel changes hands (the courier types nothing)
-//    on the way         the drop-off; "Mark delivered" needs a good GPS fix within 300 m of it; an optional photo is sealed to the shipper
+//    on the way         the drop-off; "Mark delivered" needs a good GPS fix within 300 m of it AND a photo of the parcel: that is the proof of
+//                       delivery, sealed to the shipper ("No camera?" sends the GPS part only: the shipper must then verify outside of GoGet)
 //    delivered          waiting for the shipper to confirm and pay the rest
 //  The courier can withdraw before the pickup (nothing was paid); after the parcel changed hands the delivery cannot be dropped.
 //  Payments arrive as ecash and are redeemed by the app (features/payments/redeemDelivery.js); the lines below show what was received.
@@ -11,7 +12,7 @@
 import { useState } from "react";
 import { useApp } from "../../state/AppContext.jsx";
 import { useCourier } from "../state/CourierContext.jsx";
-import { acceptedBid, deliveryContent, deliveryStatus, pickupCode, placesOf, typeLabel, sizeLabel, DELIVERED_NEAR_M } from "../../lib/delivery.js";
+import { acceptedBid, deliveryContent, deliveryStatus, deliveryVerified, pickupCode, placesOf, typeLabel, sizeLabel, DELIVERED_NEAR_M } from "../../lib/delivery.js";
 import { moneyOf, splitSats } from "../../lib/deliveryPay.js";
 import { resizeImage } from "../../lib/image.js";
 import { getProfile } from "../../nostr/profiles.js";
@@ -39,6 +40,7 @@ export default function JobDetail({ request, onBack }) {
   const shipper = getProfile(request.pubkey);
   const name = shipper?.name || shortNpub(request.pubkey);
   const [photo, setPhoto] = useState("");
+  const [noPhoto, setNoPhoto] = useState(false); // no camera: send the GPS part of the proof alone
   const [msg, setMsg] = useState("");
   const [ask, setAsk] = useState(false);
   const [quit, setQuit] = useState(false);
@@ -97,15 +99,19 @@ export default function JobDetail({ request, onBack }) {
               {m == null ? "Waiting for your location…" : near ? "You are at the drop-off." : `You are ${m < 1000 ? Math.round(m) + " m" : (m / 1000).toFixed(1) + " km"} from the drop-off. Get within ${DELIVERED_NEAR_M} m to mark it delivered.`}
               {gps !== "good" && m != null ? " A good GPS fix is needed." : ""}
             </p>
+            <p className="text-sm font-semibold inline-flex items-center gap-1.5"><Icon name="proof" size={16} /> Proof of delivery: your location and a photo</p>
             <label className="flex items-center gap-2 text-sm font-semibold underline">
-              <Icon name="camera" size={16} /> {photo ? "Photo added (tap to change)" : "Add a photo of the delivered parcel (optional)"}
+              <Icon name="camera" size={16} /> {photo ? "Photo added (tap to change)" : "Take a photo of the delivered parcel"}
               <input type="file" accept="image/*" capture="environment" onChange={onPhoto} className="sr-only" aria-label="Photo of the delivered parcel" />
             </label>
             {photo && <img src={photo} alt="Your photo" className="w-full max-h-48 object-cover rounded-xl" />}
-            <Button variant="go" onClick={() => setAsk(true)} disabled={!near}>Mark delivered</Button>
+            <Button variant="go" onClick={() => setAsk(true)} disabled={!near || (!photo && !noPhoto)}>Mark delivered</Button>
+            {!photo && !noPhoto && <button type="button" onClick={() => setNoPhoto(true)} className="w-full text-center text-xs underline text-neutral-500">No camera? Send my location only</button>}
+            {!photo && noPhoto && <p className="text-xs text-neutral-500">Without a photo the shipper must verify the delivery outside of GoGet.</p>}
           </div>
         )}
-        {status === "delivered" && <p className="mt-4 text-sm text-neutral-600">Waiting for {name} to confirm. The rest of the price is paid when they do.</p>}
+        {status === "delivered" && <p className="mt-4 text-sm text-neutral-600">Proof sent. Waiting for {name} to confirm. The rest of the price is paid when they do.</p>}
+        {status === "completed" && deliveryVerified(request) && <p className="mt-4 text-sm text-neutral-600 inline-flex items-center gap-1.5"><Icon name="proof" size={16} /> {deliveryVerified(request) === "outside" ? `${name} verified the delivery outside of GoGet.` : `${name} confirmed your photo and location.`}</p>}
         {status === "disputed" && <p className="mt-4 text-sm text-neutral-600">{name} reported a problem. The rest of the price is held. Contact them using Account → Contact methods.</p>}
 
         {money && (

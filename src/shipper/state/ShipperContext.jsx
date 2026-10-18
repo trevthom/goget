@@ -7,7 +7,7 @@
 //    acceptBid()       take ONE bid: the others are declined at once; needs ecash at the courier's mint for the whole price
 //    declineBid()      turn one bid down; closeRequest() close a request nobody took
 //    confirmPickup()   type the 4-digit code shown on the courier's phone → the parcel changed hands, the pickup share is paid
-//    confirmDelivered() / reportProblem()   the parcel arrived (the rest is paid) / it did not, or is damaged
+//    confirmDelivered(request, how) / reportProblem()   the parcel arrived (the rest is paid; `how` = "gps+photo" or "outside": verified outside of GoGet) / it did not, or is damaged
 //  A timer (every 3 s) pays what is due (features/payments/payDelivery.js) and keeps the screen awake while a delivery runs.
 // ════════════════════════════════════════════════════════════
 
@@ -146,8 +146,9 @@ export function ShipperProvider({ children }) {
     refreshData();
     return { ok: true };
   }, [tries, user, publish, refreshData]);
-  const confirmDelivered = useCallback(async (request) => {
-    const ev = confirmEvent(request, deliveryCourier(request), "delivered");
+  // `verified`: "gps+photo" (the courier's proof held up) or "outside" (the shipper checked it outside of GoGet).
+  const confirmDelivered = useCallback(async (request, verified = "outside") => {
+    const ev = confirmEvent(request, deliveryCourier(request), "delivered", { verified });
     await publish(ev.kind, ev.content, ev.tags);
     refreshData();
   }, [publish, refreshData]);

@@ -11,7 +11,9 @@
 //              DELIVERY_BID_DECLINE    turns one bid down; the request stays open.
 //    Shipper   DELIVERY_CONFIRM 30108  phase "pickup": the shipper typed the 4-digit code shown on the courier's phone (the parcel changed
 //                                      hands) → the part due at pickup is paid.  "delivered": the parcel arrived → the rest is paid.  "problem".
-//    Courier   DELIVERY_STAGE 30107    "delivered" (+ optional photo sealed to the shipper, + metres from the drop-off) or "withdrawn" (before pickup).
+//    Courier   DELIVERY_STAGE 30107    "delivered" (+ the PROOF sealed to the shipper: a photo and a signed GPS fix near the drop-off) or
+//                                      "withdrawn" (before pickup).  The shipper's "delivered" confirmation says how it was checked:
+//                                      "gps+photo" (the proof held up) or "outside" (the shipper verified it outside of GoGet).
 //  Status (deliveryStatus): requested → assigned → in_transit → delivered → completed;  disputed (the shipper reported a problem);  closed
 //  (the shipper closed it, or the courier withdrew before pickup: nothing was paid).  A request nobody took expires (deliveryExpiryMs).
 //
@@ -28,6 +30,7 @@ import { normalizeCdl, normalizeNeed, meetsCdl } from "./cdl.js";
 import { isMintUrl } from "./mints.js";
 import { startCode } from "./startcode.js";
 import { hidesMe } from "./blocks.js";
+import { haversineDistance } from "./geo.js";
 
 const HOUR = 3600000;
 export const DELIVERY_TTL_MS = 12 * HOUR; // an ASAP request lives 12 h; a timed one until 12 h after its pickup time
@@ -35,6 +38,9 @@ export const MAX_NOTE = 500;
 export const UPFRONT_CHOICES = [0, 25, 50, 75]; // % of the price paid when the parcel is handed over
 export const DEFAULT_UPFRONT = 50;
 export const DELIVERED_NEAR_M = 300; // "Delivered" needs a good GPS fix this close to the drop-off
+export const PROOF_FIX_MAX_ACCURACY_M = 200; // the proof's GPS fix must be a good one (lib/gps.js GOOD_FIX_METERS)
+export const PROOF_FIX_MAX_AGE_MS = 10 * 60000; // ...and taken within 10 minutes before the "delivered" marker
+export const VERIFIED_HOW = ["gps+photo", "outside"]; // how the shipper checked a delivery
 
 export const DELIVERY_TYPES = [
   { id: "document", label: "Document" },
@@ -219,6 +225,12 @@ export function confirmsOf(request) {
   });
 }
 
+// How the shipper checked the delivery when they confirmed it: "gps+photo" | "outside" | null (not confirmed, or an older confirmation).
+export function deliveryVerified(request) {
+  const v = confirmsOf(request).get("delivered")?.c?.verified;
+  return VERIFIED_HOW.includes(v) ? v : null;
+}
+
 // requested | assigned | in_transit | delivered | completed | disputed | closed
 export function deliveryStatus(request) {
   return cached("s:" + request.id, () => {
@@ -389,30 +401,49 @@ export function declineBidEvent(request, bid) {
   return { kind: K.DELIVERY_BID_DECLINE, content: { bidId: bid.id }, tags: [["e", latest.id], ["e", bid.id], ["p", bid.courier], ["d", `decline-${bid.id}`], ["t", "delivery"]] };
 }
 
-// stage: "delivered" ({ photo?, distM? }) | "withdrawn". A photo is sealed to the shipper.
-export function stageEvent(request, user, stage, { photo = "", distM = null } = {}) {
+// stage: "delivered" ({ photo?, fix? }) | "withdrawn". The PROOF of delivery is the photo plus the courier's GPS fix ({ lat, lng, accuracy }); both are
+// sealed to the shipper and signed with the event, so the shipper's app can check them (deliveryProof) and nobody else can read them.
+export function stageEvent(request, user, stage, { photo = "", fix = null } = {}) {
   const latest = deliveryVersions(request)[0] || request;
+  const f = fix && Number.isFinite(fix.lat) && Number.isFinite(fix.lng) ? { lat: fix.lat, lng: fix.lng, accuracy: Math.round(Number(fix.accuracy) || 0), fixAt: Date.now() } : null;
   return {
     kind: K.DELIVERY_STAGE,
-    content: { stage, at: Date.now(), ...(Number.isFinite(distM) && { distM: Math.round(distM) }), ...(photo && { sealed: seal(user.sk, request.pubkey, { photo }) }) },
+    content: { stage, at: Date.now(), ...((photo || f) && { sealed: seal(user.sk, request.pubkey, { ...(photo && { photo }), ...(f && f) }) }) },
     tags: [["e", latest.id], ["p", request.pubkey], ["d", `stage-${deliveryKey(request)}-${stage}`], ["t", "delivery"]],
   };
 }
 
-export function confirmEvent(request, courierPubkey, phase, { ok = true, note = "" } = {}) {
+// `verified` (phase "delivered" only): how the shipper checked it, one of VERIFIED_HOW.
+export function confirmEvent(request, courierPubkey, phase, { ok = true, note = "", verified = "" } = {}) {
   const latest = deliveryVersions(request)[0] || request;
   return {
     kind: K.DELIVERY_CONFIRM,
-    content: { phase, ok, note: str(note, 300), at: Date.now() },
+    content: { phase, ok, note: str(note, 300), at: Date.now(), ...(phase === "delivered" && VERIFIED_HOW.includes(verified) && { verified }) },
     tags: [["e", latest.id], ["p", courierPubkey], ["d", `confirm-${deliveryKey(request)}-${phase}`], ["t", "delivery"]],
   };
 }
 
-// The photo a courier attached to "delivered", opened by the shipper (null if none or unreadable).
-export function deliveryPhoto(request, user) {
+// The PROOF of a delivery, read by the shipper or the courier (the two who can open it): null until the courier marked it delivered.
+//   { photo (a data: image or null), gps (a good fix, fresh, within DELIVERED_NEAR_M of the exact drop-off), distM (metres, or null),
+//     verified (gps AND photo) }
+// "verified" means the courier's signed claim holds up; it cannot prove the phone's GPS was honest, which is why the shipper still decides
+// (and may say they verified it outside of GoGet).
+export function deliveryProof(request, user) {
   const st = stagesOf(request).get("delivered");
   const courier = deliveryCourier(request);
-  if (!st?.c?.sealed || !courier || !user) return null;
-  const v = unseal(user.sk, courier, st.c.sealed);
-  return v && typeof v.photo === "string" && v.photo.startsWith("data:image/") ? v.photo : null;
+  if (!st || !courier || !user) return null;
+  const other = user.publicKey === request.pubkey ? courier : request.pubkey;
+  const v = st.c.sealed ? unseal(user.sk, other, st.c.sealed) : null;
+  const photo = v && typeof v.photo === "string" && v.photo.startsWith("data:image/") ? v.photo : null;
+  const ex = exactDelivery(request, user);
+  let distM = null, gps = false;
+  if (v && ex && Number.isFinite(v.lat) && Number.isFinite(v.lng)) {
+    distM = Math.round(haversineDistance(v.lat, v.lng, ex.dropoff.lat, ex.dropoff.lng) * 1609.344);
+    const fresh = Number.isFinite(v.fixAt) && v.fixAt <= st.at + 60000 && v.fixAt >= st.at - PROOF_FIX_MAX_AGE_MS;
+    gps = distM <= DELIVERED_NEAR_M && Number.isFinite(v.accuracy) && v.accuracy <= PROOF_FIX_MAX_ACCURACY_M && fresh;
+  }
+  return { photo, gps, distM, verified: gps && !!photo };
 }
+
+// The photo a courier attached to "delivered", opened by the shipper (null if none or unreadable).
+export const deliveryPhoto = (request, user) => deliveryProof(request, user)?.photo || null;

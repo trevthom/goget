@@ -210,8 +210,16 @@ assert.equal(P.dueNow(reqEv), null);
 // ── Delivered: the courier marks it; the shipper confirms; the rest is due ──
 pub(D.stageEvent(reqEv, user(stranger), "delivered"), stranger);
 assert.equal(D.deliveryStatus(reqEv), "in_transit", "only the courier can mark it delivered");
-pub(D.stageEvent(reqEv, user(c1), "delivered", { photo: "data:image/jpeg;base64,AAAA", distM: 42.4 }), c1);
+pub(D.stageEvent(reqEv, user(c1), "delivered", { photo: "data:image/jpeg;base64,AAAA", fix: { lat: 38.1004, lng: -84.6, accuracy: 12 } }), c1);
 assert.equal(D.deliveryStatus(reqEv), "delivered");
+{
+  const pr = D.deliveryProof(reqEv, user(ship));
+  assert.deepEqual([pr.photo, pr.gps, pr.verified], ["data:image/jpeg;base64,AAAA", true, true], "photo + a fix at the drop-off: verified");
+  assert.ok(pr.distM >= 40 && pr.distM <= 50, "the shipper's app measures the distance itself: " + pr.distM);
+  assert.equal(D.deliveryProof(reqEv, user(c1)).verified, true, "the courier can read their own proof");
+  assert.deepEqual([D.deliveryProof(reqEv, user(stranger)).photo, D.deliveryProof(reqEv, user(stranger)).gps], [null, false], "anyone else gets nothing readable");
+}
+assert.equal(D.deliveryVerified(reqEv), null, "not confirmed yet");
 assert.equal(P.dueNow(reqEv), null, "the rest is paid only when the shipper confirms");
 assert.equal(D.deliveryPhoto(reqEv, user(ship)), "data:image/jpeg;base64,AAAA", "the photo is for the shipper");
 assert.equal(D.deliveryPhoto(reqEv, user(stranger)), null);
@@ -219,8 +227,9 @@ assert.ok(!relay.query({ kinds: [K.DELIVERY_STAGE] }).some((e) => e.content.incl
 pub(D.confirmEvent(reqEv, c1.publicKey, "problem", { ok: false, note: "dented" }), ship);
 assert.equal(D.deliveryStatus(reqEv), "disputed", "a reported problem holds the final payment");
 assert.equal(P.dueNow(reqEv), null);
-pub(D.confirmEvent(reqEv, c1.publicKey, "delivered"), ship);
+pub(D.confirmEvent(reqEv, c1.publicKey, "delivered", { verified: "gps+photo" }), ship);
 assert.equal(D.deliveryStatus(reqEv), "completed");
+assert.equal(D.deliveryVerified(reqEv), "gps+photo", "the confirmation says how it was checked");
 due = P.dueNow(reqEv);
 assert.deepEqual([due.phase, due.amountSats], ["final", 8500]);
 const pay2 = pub(P.payEvent(reqEv, c1.publicKey, user(ship), { phase: "final", amountSats: 5000, mint: MINT, token: "cashuBpart" }), ship); // a short wallet pays what it can
@@ -268,6 +277,41 @@ pub(acc4, ship); pub(ver4, ship);
 pub(D.confirmEvent(req4, c3.publicKey, "pickup"), ship);
 pub(D.stageEvent(req4, user(c3), "withdrawn"), c3);
 assert.equal(D.deliveryStatus(req4), "in_transit", "a courier cannot walk away with the parcel");
+
+// ── Proof of delivery: GPS AND photo, or the shipper says they verified it outside of GoGet ──
+const toDelivered = (fixOpts, photo) => {
+  const r = pub(D.requestEvent(user(ship), form()), ship);
+  bid(r, c2, {});
+  const [a, v] = D.acceptEvents(r, user(ship), D.allBids(r)[0], D.exactDelivery(r, user(ship)));
+  pub(a, ship); pub(v, ship);
+  pub(D.confirmEvent(r, c2.publicKey, "pickup"), ship);
+  pub(D.stageEvent(r, user(c2), "delivered", { photo, fix: fixOpts }), c2);
+  return r;
+};
+const PIC = "data:image/jpeg;base64,BBBB";
+const here = { lat: 38.1, lng: -84.6, accuracy: 20 };
+let pr = D.deliveryProof(toDelivered(here, PIC), user(ship));
+assert.equal(pr.verified, true);
+pr = D.deliveryProof(toDelivered(here, ""), user(ship));
+assert.deepEqual([pr.gps, !!pr.photo, pr.verified], [true, false, false], "no photo: not verified");
+pr = D.deliveryProof(toDelivered(null, PIC), user(ship));
+assert.deepEqual([pr.gps, !!pr.photo, pr.verified, pr.distM], [false, true, false, null], "no GPS fix: not verified");
+pr = D.deliveryProof(toDelivered({ lat: 38.2, lng: -84.6, accuracy: 20 }, PIC), user(ship));
+assert.deepEqual([pr.gps, pr.verified], [false, false], "a fix 7 miles away: not verified");
+assert.ok(pr.distM > 10000);
+pr = D.deliveryProof(toDelivered({ ...here, accuracy: 900 }, PIC), user(ship));
+assert.equal(pr.gps, false, "a weak fix does not count");
+pr = D.deliveryProof(toDelivered(here, "data:text/html;base64,PHNjcmlwdD4="), user(ship));
+assert.equal(pr.photo, null, "only an image counts as the photo");
+// the shipper can still confirm a delivery GoGet could not verify, saying so
+const unsure = toDelivered(null, "");
+pub(D.confirmEvent(unsure, c2.publicKey, "delivered", { verified: "outside" }), ship);
+assert.equal(D.deliveryVerified(unsure), "outside");
+assert.equal(D.deliveryStatus(unsure), "completed");
+const junkWay = toDelivered(here, PIC);
+pub(D.confirmEvent(junkWay, c2.publicKey, "delivered", { verified: "trust me" }), ship);
+assert.equal(D.deliveryVerified(junkWay), null, "only the two known ways are read");
+assert.ok(!relay.query({ kinds: [K.DELIVERY_STAGE] }).some((e) => e.content.includes("38.1") || e.content.includes("BBBB")), "neither the photo nor the position is public");
 
 // ── The shipper can close a request nobody took ──
 const req5 = pub(D.requestEvent(user(ship), form()), ship);

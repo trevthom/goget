@@ -3,7 +3,7 @@
 //  What is on screen is DERIVED from signed events (lib/delivery.js): `open` (requests this courier may see: near, open, meeting the
 //  CDL need), `jobs` (deliveries the shipper gave this courier), `bids` (this courier's bids and where they stand). UI-only: the radius.
 //  Actions: placeBid / withdrawBid (a price, minutes to the pickup, notes, the CDL statement from Account → Courier details),
-//  markDelivered (needs a good GPS fix near the drop-off; a photo is sealed to the shipper), withdrawJob (only before the pickup).
+//  markDelivered (needs a good GPS fix near the drop-off; the proof, a photo + that fix, is sealed to the shipper), withdrawJob (only before the pickup).
 //  Timers: every 3 s redeem the shipper's ecash payments (features/payments/redeemDelivery.js); every 6 s send the courier's exact
 //  position, encrypted, to the shipper of each running job; every 8 s ask the relays for news. The screen stays awake during a job.
 // ════════════════════════════════════════════════════════════
@@ -79,12 +79,12 @@ export function CourierProvider({ children }) {
   }, [distanceToDropoff, gps]);
   const markDelivered = useCallback(async (request, photo = "") => {
     if (!canDeliver(request)) return { ok: false, message: `Get within ${DELIVERED_NEAR_M} m of the drop-off with a good GPS fix first.` };
-    const ev = stageEvent(request, user, "delivered", { photo, distM: distanceToDropoff(request) });
+    const ev = stageEvent(request, user, "delivered", { photo, fix: myPosition });
     await publish(ev.kind, ev.content, ev.tags);
     refreshData();
     pushNotice("Marked delivered. The shipper confirms and pays the rest.");
     return { ok: true };
-  }, [canDeliver, distanceToDropoff, user, publish, refreshData, pushNotice]);
+  }, [canDeliver, myPosition, user, publish, refreshData, pushNotice]);
   const withdrawJob = useCallback(async (request) => {
     const ev = stageEvent(request, user, "withdrawn");
     await publish(ev.kind, ev.content, ev.tags);

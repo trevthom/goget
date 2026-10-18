@@ -4,8 +4,8 @@
 //    courier chosen     → the courier's live position; at the handover the shipper TYPES the 4-digit code shown on the courier's phone
 //                         (the parcel changed hands) and the pickup share of the price is paid by the app
 //    on its way         → the courier's position; what has been paid
-//    delivered          → the courier's photo and how far from the drop-off it was taken; "Parcel received" pays the rest,
-//                         "Report a problem" holds it
+//    delivered          → the PROOF: the courier's photo and a signed GPS fix, checked against the drop-off. With both, "Parcel received"
+//                         pays the rest. Without them the shipper may say "I verified it outside of GoGet", or report a problem (holds it)
 //    closed / completed → what happened and what was paid
 //  The courier's exact position is end-to-end encrypted to this shipper and shown only while the delivery runs.
 // ════════════════════════════════════════════════════════════
@@ -17,7 +17,7 @@ import { relay } from "../../nostr/relay.js";
 import { getProfile } from "../../nostr/profiles.js";
 import { shortNpub } from "../../nostr/keys.js";
 import { subscribeRideLocation } from "../../nostr/live.js";
-import { acceptedBid, deliveryContent, deliveryCourier, deliveryPhoto, deliveryNeed, pendingBids, placesOf, stagesOf, typeLabel, sizeLabel } from "../../lib/delivery.js";
+import { acceptedBid, deliveryContent, deliveryCourier, deliveryProof, deliveryVerified, deliveryNeed, pendingBids, placesOf, typeLabel, sizeLabel } from "../../lib/delivery.js";
 import { moneyOf, dueNow, splitSats } from "../../lib/deliveryPay.js";
 import { needText } from "../../lib/cdl.js";
 import { attemptGate, CODE_DIGITS } from "../../lib/startcode.js";
@@ -27,9 +27,25 @@ import Avatar from "../../ui/Avatar.jsx";
 import VouchBadge from "../../ui/VouchBadge.jsx";
 import Money, { moneyText } from "../../ui/Money.jsx";
 import Button from "../../ui/Button.jsx";
+import Icon from "../../ui/Icon.jsx";
 import { MapPage, Sheet, FloatButton } from "../../ui/Layout.jsx";
 import { ConfirmDialog, inputCls } from "../../ui/Parts.jsx";
 import AddFunds from "../../features/payments/AddFunds.jsx";
+
+// The two checks of the proof: a photo, and a signed GPS fix at the drop-off.
+function ProofCard({ proof, name }) {
+  const row = (ok, text) => <li className="flex items-center gap-2"><Icon name={ok ? "check" : "x"} size={14} className={ok ? "text-[#05944f]" : "text-[#dc2626]"} /> {text}</li>;
+  return (
+    <div className="rounded-xl bg-neutral-100 px-3 py-2 text-sm" data-testid="proof-card">
+      <p className="font-semibold inline-flex items-center gap-1.5"><Icon name="proof" size={16} /> Proof of delivery</p>
+      <ul className="mt-1 space-y-0.5">
+        {row(!!proof?.photo, proof?.photo ? `Photo from ${name}` : "No photo")}
+        {row(!!proof?.gps, proof?.gps ? `Location signed ${proof.distM} m from the drop-off` : proof?.distM != null ? `Location ${proof.distM} m from the drop-off, or the fix was weak or old` : "No location in the proof")}
+      </ul>
+      {!proof?.verified && <p className="text-xs text-neutral-600 mt-2">GoGet cannot verify this delivery. If you checked it another way, say so below. Otherwise report a problem.</p>}
+    </div>
+  );
+}
 
 export default function DeliveryDetail({ request, onBack }) {
   const { user, setView, openProfile, btcPrice, liveTick } = useApp();
@@ -70,8 +86,9 @@ export default function DeliveryDetail({ request, onBack }) {
     else setTyped("");
   };
   const [label, tone] = STATUS_WORDS[status];
-  const delivered = stagesOf(request).get("delivered");
-  const photo = status === "delivered" || status === "disputed" || status === "completed" ? deliveryPhoto(request, user) : null;
+  const proof = status === "delivered" || status === "disputed" || status === "completed" ? deliveryProof(request, user) : null;
+  const photo = proof?.photo || null;
+  const how = proof?.verified ? "gps+photo" : "outside"; // what a confirmation records
   const bids = status === "requested" ? pendingBids(request).length : 0;
   const repost = () => {
     setDraft({ type: c.what?.type || "package", size: c.what?.size || "medium", note: c.what?.note || "", pickup: pl.exact ? pl.pickup : null, dropoff: pl.exact ? pl.dropoff : null, cdlRequired: !!deliveryNeed(request).required, endorsements: deliveryNeed(request).endorsements, contact: pl.contact || "", step: "form", when: "ASAP" });
@@ -141,18 +158,19 @@ export default function DeliveryDetail({ request, onBack }) {
         {status === "delivered" && (
           <div className="mt-4 space-y-3">
             {photo && <img src={photo} alt="Photo from the courier at the drop-off" className="w-full rounded-xl max-h-64 object-cover" />}
-            <p className="text-sm text-neutral-600">
-              {name} marked it delivered{delivered?.c?.distM != null ? ` ${delivered.c.distM} m from the drop-off point` : ""}. Is it there?
-            </p>
-            <Button variant="go" onClick={() => setAsk(true)}>Parcel received{due || money ? ` · pay ${moneyText(splitSats(money?.priceSats || 0, bid?.upfrontPct ?? 50).final, btcPrice)}` : ""}</Button>
+            <ProofCard proof={proof} name={name} />
+            {proof?.verified
+              ? <Button variant="go" onClick={() => setAsk(true)}>Parcel received{money ? ` · pay ${moneyText(splitSats(money.priceSats, bid?.upfrontPct ?? 50).final, btcPrice)}` : ""}</Button>
+              : <Button variant="go" onClick={() => setAsk(true)}>I verified it outside of GoGet{money ? ` · pay ${moneyText(splitSats(money.priceSats, bid?.upfrontPct ?? 50).final, btcPrice)}` : ""}</Button>}
             <Button variant="danger" onClick={() => setProblem(true)}>Report a problem</Button>
           </div>
         )}
         {status === "disputed" && (
           <div className="mt-4 space-y-3">
             {photo && <img src={photo} alt="Photo from the courier at the drop-off" className="w-full rounded-xl max-h-64 object-cover" />}
+            <ProofCard proof={proof} name={name} />
             <p className="text-sm text-neutral-600">The rest of the price is held. If it turned out fine, you can still confirm.</p>
-            <Button variant="go" onClick={() => setAsk(true)}>It is fine: pay the rest</Button>
+            <Button variant="go" onClick={() => setAsk(true)}>{proof?.verified ? "It is fine: pay the rest" : "I verified it outside of GoGet: pay the rest"}</Button>
           </div>
         )}
         {status === "closed" && <div className="mt-4"><Button onClick={repost}>Post it again</Button></div>}
@@ -170,12 +188,13 @@ export default function DeliveryDetail({ request, onBack }) {
             {pay?.status === "error" && <p className="text-red-600 mt-2" role="alert">{pay.message}</p>}
           </div>
         )}
+        {status === "completed" && deliveryVerified(request) && <p className="text-sm text-neutral-600 mt-3 inline-flex items-center gap-1.5"><Icon name="proof" size={16} /> {deliveryVerified(request) === "outside" ? "You verified this delivery outside of GoGet." : "Verified by the courier's photo and GPS location."}</p>}
         {status === "completed" && <p className="text-xs text-neutral-500 mt-3">Thank you. Know and trust this courier? Add them under Account → Your vouches.</p>}
       </Sheet>
 
       <ConfirmDialog open={ask} title="Parcel received?" confirmLabel="Yes, pay the courier" cancelLabel="Not yet"
         message={`This pays the rest of the price to ${name}. It cannot be taken back.`}
-        onConfirm={() => { setAsk(false); confirmDelivered(request); }} onCancel={() => setAsk(false)} />
+        onConfirm={() => { setAsk(false); confirmDelivered(request, how); }} onCancel={() => setAsk(false)} />
       {problem && (
         <div role="dialog" aria-modal="true" aria-label="Report a problem" className="fixed inset-0 z-[10000] flex items-end justify-center bg-[#000]/50" onClick={() => setProblem(false)}>
           <div className="w-full max-w-md bg-white rounded-t-3xl p-5" onClick={(e) => e.stopPropagation()}>
