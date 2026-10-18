@@ -17,7 +17,7 @@ export const geo = (c, p) => c.setGeolocation({ latitude: p.lat, longitude: p.ln
 
 // The pickup is never filled in by the app: pin it on the map (the pin starts at the phone's position).
 export async function pinPickup(R) {
-  await R.getByLabel("Pickup location").waitFor();
+  await R.getByLabel("Pickup location").click(); // the map button shows only for the active field
   await tap(R.getByRole("button", { name: /Set pickup on the map/ }));
   await R.getByText("100 Main St, Lexington").first().waitFor({ timeout: 15000 });
   await tap(R.getByRole("button", { name: "Confirm pickup" }));

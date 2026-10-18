@@ -57,7 +57,7 @@ export default function AccountScreen() {
               gapsFor={(vehicle) => driveGaps({ ...user, vehicle })}
             />
           </Fold>
-          <Fold id="lightning-address" title="Cash out location" defaultOpen={!user.lud16} status={user.lud16 ? { text: "Set", tone: "ok" } : { text: "Needed", tone: "warn" }}>
+          <Fold id="lightning-address" title="Cash out location" status={user.lud16 ? { text: "Set", tone: "ok" } : null}>
             <LightningAddressSection value={user.lud16 || ""} onSave={(lud16) => save({ lud16 })} />
           </Fold>
           <Fold id="appearance" title="Appearance"><AppearanceSection /></Fold>

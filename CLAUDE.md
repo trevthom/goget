@@ -27,7 +27,7 @@ Look: white UI, black buttons, bottom sheets over a full-screen map (Inter font)
   `build:rider` / `build:driver` build one. `preview:rider` / `preview:driver` serve a build.
 - `npm test` → Node's built-in test runner over `test/*.test.mjs` (no extra deps):
   trust rules, ride stages, finishing a ride, fares, trips, earnings, privacy, history, LNURL, geocode, publish,
-  event ordering, contact links, GPS quality, payment evidence, blocking, trip sharing, vouches (`vouches`), the recovery phrase and restore (`recovery`, `restore`), native location, outbox, relay health (`relayhealth`), request expiry / blocking both ways / declined offers (`requests`), old flat offers read as standard / driver rates + currencies / exact amounts / tips / pickup change / odometer + 5% rule + GPS gap / stage times / relay filter shape / gender order / driver requirements / **dark mode (`appearance`), the trip card: low balance / fare-change estimate / trip clock seconds (`tripcard`), ticks, missed payments, final tick, start code, 50 m arrival, silence, waivers, extra stops, frozen rates (`ticks`, `ridepay`, `rideflow`), the ecash wallet (`ecash`) and the real `@cashu/cashu-ts` client against a local test mint (`cashu-adapter`, helpers in `test/helpers/`)**. Run it after touching `lib/*`, `nostr/*`, `features/payments/*`.
+  event ordering, contact links, GPS quality, payment evidence, blocking, trip sharing, vouches (`vouches`), the recovery phrase and restore (`recovery`, `restore`), native location, outbox, relay health (`relayhealth`), request expiry / blocking both ways / declined offers (`requests`), old flat offers read as standard / driver rates + currencies / exact amounts / tips / pickup change / odometer + 5% rule + GPS gap / stage times / relay filter shape / gender order / driver requirements / **dark mode (`appearance`), the trip card: low balance / fare-change estimate / trip clock seconds (`tripcard`), ticks, missed payments, final tick, start code, 50 m arrival, silence, waivers, extra stops, frozen rates (`ticks`, `ridepay`, `rideflow`), the ecash wallet incl. paying an invoice and taking a token back (`ecash`), automatic cash out (`autocashout`) and the real `@cashu/cashu-ts` client against a local test mint (`cashu-adapter`, helpers in `test/helpers/`)**. Run it after touching `lib/*`, `nostr/*`, `features/payments/*`.
 - `scripts/e2e/` → optional browser end-to-end run (a rider and a driver, a local relay, the local test mint). Needs `npm i --no-save ws playwright`. Not part of `npm test`.
 - `node scripts/export-apps.mjs [--push] [--only rider|driver] [--out DIR]` → generates the standalone
   `trevthom/nostr-ride-rider` / `nostr-ride-driver` repos (generated mirrors: never edit them; change code here, re-export).
@@ -123,6 +123,7 @@ src/
     meter.js      # referenceMiles (driver's distance unless the rider's differs >5%), meterView, fmt* incl. fmtDurationSec (pure)
     pickup.js     # pickupChange(request): pending|accepted|declined; PICKUP_CHANGE_NOTE (the exact place logic is in privacy.js)
     fare.js       # quoteFare/fareAmount/usdToSats/pickupEta + normalizeRates (incl. currency)/typicalFare/typicalSats/median/satsFromUsd/usdFromSats/lowBalanceSats/isLowBalance/fareChangeSats (pure)
+    autocashout.js # "Automatically cash out at": the saved choice ({amount, code} per account), autoThresholdSats, autoCashOutDue (pure rules)
     earnings.js   # completedDrives (paid ticks + tips), summarizeEarnings
     privacy.js    # publicPlace, seal/unseal, exactTrip, sealVehicle/myVehicle/offerPlate
     contact.js    # contactHref (safe links from untrusted handles)
@@ -150,7 +151,7 @@ src/
     auth/        AuthScreen (role-aware copy) + AuthSteps (unlock, key backup)
     profile/     ProfileParts (useSaveProfile, AccountHeader, ContactMethods, RelaysSection, LogoutButton),
                  AppearanceSection (the Dark mode switch), VehicleSection, VouchesSection ("Your vouches": npub in, list out), TypicalFareSection ("Your rates", locked during a ride), CurrencySection, LightningAddressSection, WalletSection, KeysSection
-    ecash/       EcashSection (balance, mint, paste a token, back up, driver cash out), RecoverySection (RecoveryFold + RecoveryNotice: write down 12 words, show again, I-lost-a-phone) + RestorePanel, myMint.js
+    ecash/       EcashSection (balance, Send, mint, paste a token, back up, driver cash out + Automatically cash out), SendEcash (token or Lightning), AutoCashOutField, useAutoCashOut, RecoverySection (RecoveryFold + RecoveryNotice: write down 12 words, show again, I-lost-a-phone) + RestorePanel, myMint.js
     payments/    PayDriver (a Lightning address: tips), AddFunds (mint invoice → ecash, NWC or any wallet), rideTicks.js (rider: payDue), redeemTicks.js (driver: redeem + reply),
                  redeemWaivers.js (rider: collect refunds), useRideLink.js (quiet phone, sign of life, 10-minute silence)
   rider/
@@ -259,6 +260,9 @@ carries `driverPubkey`. Stage is `enroute` (default) → `arrived` → `riding`.
   Proofs are saved encrypted (NIP-44 to the user's own key, in pieces). Rules: one money move at a time (`_exclusive`); a token being sent sits in `pending` until its event is
   published/queued (`settle`) or is returned (`unreserve`/`recoverPending`); a token is redeemed once (fingerprint); the sender adds the mint's input fee (`includeFees`) so the receiver
   gets the full tick; `EcashError.definitive` separates a mint's "no" from an unreachable mint. Never log proofs or tokens. Test against `test/helpers/localmint.mjs` (real maths).
+- **Sending ecash / auto cash out** (`features/ecash/SendEcash.jsx`, `AutoCashOutField.jsx`, `useAutoCashOut.js`, `lib/autocashout.js`): *Send* makes a token with `ecash.pay` (it waits in `pending` while the dialog is open; *Done* = `settle`, *Take it back* = `reclaim(id)`: the mint says unspent → back, spent → forgotten)
+  or pays a Lightning invoice / address with `ecash.payInvoice(url, invoice)` (the shared `_meltWith` tail also serves `cashOut`). Both locked while a ride runs. "Automatically cash out at" (driver app, `useAutoCashOut` in `DriverContext`): `{amount, code}` saved per account (`autoCashOut_<pk16>`), saved on blur / Enter only (never per key),
+  `autoCashOutDue` = needs `lud16`, no ride, a known price, balance at ONE mint ≥ the amount, 10 min after a failure (`AUTO_RETRY_MS`); one notice per failure streak. The cash out location is OPTIONAL (no gap in `driveGaps`).
 - **Tips** still go over Lightning: the rider's `lud16` payment via `PayDriver` and a RIDE_PAYMENT `tip` record. **Evidence**: tips are re-checked by the driver app
   (`verifyPayment`: only a `verify` URL on the host of the driver's own lud16 is fetched); the tick trail (30095/30096/30097/30098) is the evidence for the ride's money.
 - **Finish ride (lib/finish.js)**: one `finishRide` action per app (rider: RiderContext, driver: DriverContext), always behind a `ConfirmDialog`. Before the `riding` marker nothing is
@@ -277,7 +281,7 @@ carries `driverPubkey`. Stage is `enroute` (default) → `arrived` → `riding`.
   exists and the words are not written down → `rotateAll` (refuse on a failed swap unless `force`) → `wallet.wipe()` + `box.erase()`; `AppContext` keeps `ecashOff` (`nostrride_ecashOff_<pk16>`), `disconnectEcash`, `connectEcash`; while off the wallet is not loaded (no new phrase is made), a driver cannot GO and a rider
   cannot confirm a driver, and it is locked while a ride is running; (7) on "Blinded message is already signed" (10002) the adapter skips its counters ahead and retries once (another device used the numbers) and takes no coins; (8) `@cashu/cashu-ts` is pinned EXACTLY (no `^`) and
   `test/recovery.test.mjs` holds the NUT-13 specification vector: a library change must not alter a derived secret. The phrase counts as safe (`backedUp`) only after the person types three words back. Old random coins (`state.legacy`) are swapped under the phrase when it is confirmed.
-- **Account folds (ui/Fold.jsx)**: every setting on both Account screens is a `<Fold id title>`: closed at first (a driver's vehicle / cash out location start open while still needed; the Lightning address section is titled **Cash out location**), open state remembered per device (`nostrride_fold_<id>`), content stays mounted while closed (typed text is kept).
+- **Account folds (ui/Fold.jsx)**: every setting on both Account screens is a `<Fold id title>`: closed at first (a driver's vehicle starts open while still needed; the Lightning address section is titled **Cash out location**), open state remembered per device (`nostrride_fold_<id>`), content stays mounted while closed (typed text is kept).
   A section's own `SectionLabel`/`FoldTitle` draws nothing inside a Fold. E2E scripts open a section with `openFold(page, title)` (scripts/e2e/flow.mjs). New settings go in a Fold.
 - **Dark mode (lib/appearance.js, tailwind.config.js, src/index.css, public/theme-init.js, features/profile/AppearanceSection.jsx)**: Account → Appearance → Dark mode saves and applies AT ONCE (no Save button; `nostrride_dark`). The Tailwind colors `white`, `black`, `neutral-*` and the tints of
   red / amber / green / blue are CSS variables (`:root` = light, `.dark` = dark; channels as `r g b`, so `bg-black/50` still works), so ordinary classes follow the look with no `dark:` variant. In the dark look `white` and `black` TRADE PLACES (a `bg-black text-white` button becomes a light button with dark text; `bg-white` is the
@@ -319,7 +323,7 @@ carries `driverPubkey`. Stage is `enroute` (default) → `arrived` → `riding`.
 - **Gender preference**: drivers MAY set `gender` ("male" | "female") in kind 0 (copied into offers); anything else is ignored.
   A rider's preference (`getSetting("genderPref")`, local only) only reorders the offers via `rankOffers`; never filter or hide a driver by it.
 - **Drive gating**: `isDriveReady(user)` = `driveGaps(user)` is empty (lib/profile.js): face photo + vehicle year/make/model +
-  vehicle photo + plate state/number + cash out location, i.e. a Lightning address (no driver's license photo). Gender is optional. Until then the
+  vehicle photo + plate state/number (no driver's license photo). The cash out location (a Lightning address) and gender are optional. Until then the
   Drive tab shows Onboarding and GO is unavailable. Every message about what is missing comes from `driveGaps`/`gapsText`
   so it names the exact items; keep it that way when adding a requirement.
 - **Tips**: optional and never required. `TipSheet` (opened from the Receipt's quiet link and from Activity → past trip, any time after the ride)
@@ -335,8 +339,10 @@ carries `driverPubkey`. Stage is `enroute` (default) → `arrived` → `riding`.
   from `rideTimes(request)` (signed stage markers; they carry earlier times because relays keep only the newest marker). The meter now FEEDS THE TICKS (miles → mile ticks and the final tick).
 - **nostr-tools filters**: `pool.subscribeMany(relays, filter, params)` and `querySync` take ONE filter OBJECT in the installed 2.25 (an array reaches the relay as an
   invalid filter and live subscriptions silently die). `test/pool-api.test.mjs` guards it. Test relays must be strict about this too.
-- **Pickup is never automatic**: `PlaceSearch` does NOT fill the pickup from GPS; the rider types an address or a business name, pins the spot (`PinPicker`, the "Set pickup on the map" button is always visible), or taps "Your location" (a deliberate tap). `PlanTrip` never passes `here` as a pickup. It shows a *Done* button when both places are set.
-  The DROP-OFF can be pinned too ("Set drop-off on the map", also always visible): `PlaceSearch onPin(field)` → `plan.pinField` ("pickup" | "dropoff") → `PinPicker field`; confirming sets that place and opens the quote when the other one is set.
+- **Pickup is never automatic**: `PlaceSearch` does NOT fill the pickup from GPS; the rider types an address or a business name, pins the spot (`PinPicker`), or taps "Your location" (a deliberate tap). `PlanTrip` never passes `here` as a pickup. It shows a *Done* button when both places are set.
+  **The search page shows nothing but the two boxes (and Back / Cancel) until a box is ACTIVE** (has the cursor; `focus` state, cleared 150 ms after a blur; the panel and "Your location" swallow `mousedown` so a tap never takes the cursor away). For the active box only: first its map button ("Set pickup on the map" / "Set drop-off on the map"),
+  then, below it, that box's 3 most recent places (`recents.pickup` / `recents.dropoff` = `recentPlaces(field, 3)` from the rider's own earlier requests) or, once the rider types 3+ characters, the search results; then the business-name hint (pickup) and *Done*. `PlaceSearch onPin(field)` → `plan.pinField` ("pickup" | "dropoff") → `PinPicker field`; confirming sets that place and opens the quote when the other one is set.
+  E2E: click the box first (`pinPickup` does), then the button.
 - **Either person finishes the ride** (no cancellations). There are NO star ratings and NO reviews (too easy to fake; see Vouches). Ended rides come back as the
   receipt/summary screen for up to 6 h until dismissed (`riderDone` / `driverDone` in localStorage).
 - **Live location**: the driver app broadcasts exact position to the rider (NIP-44, ephemeral) for the

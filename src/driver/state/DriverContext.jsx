@@ -45,6 +45,7 @@ import { isRideExpired, rideEnding, rideKey, rideStatus, rideTimes, rideVersions
 import { DEFAULT_REQUEST_RADIUS_MILES, LOCATION_PING_MS } from "../../config/settings.js";
 import { getSetting, setSetting } from "../../config/relays.js";
 import { moneyText } from "../../ui/Money.jsx";
+import { useAutoCashOut } from "../../features/ecash/useAutoCashOut.js";
 
 const DriverContext = createContext(null);
 export const useDriver = () => useContext(DriverContext);
@@ -107,6 +108,7 @@ export function DriverProvider({ children }) {
   // The driver's own odometer (miles to the pickup, miles on the trip), and the distances the rider's app
   // says both screens should show (lib/meter.js: the driver's, unless the rider's differs by more than 5%).
   const odo = useDriveOdometer(activeDrive, myPosition);
+  useAutoCashOut({ locked: !!activeDrive }); // cashes out by itself at the amount set in Account → Ecash wallet
   const [agreed, setAgreed] = useState(null); // { pm, tm, at }
 
   // ── Online / offline ──

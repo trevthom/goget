@@ -60,7 +60,7 @@ that password. Use a different account in each app window to play both sides.
 
 **Driver app** (once):
 1. **Account** tab → add a **photo**, your **vehicle** (year, make, model, plate, and a photo of the car), and a
-   **Cash out location** (a Lightning address, like `you@wallet.com`; you cash out there). Check the **ecash mint** you are paid at (*Account → Ecash wallet*).
+   **Cash out location** (optional: a Lightning address, like `you@wallet.com`; you can cash out there by hand or set *Automatically cash out at*). Check the **ecash mint** you are paid at (*Account → Ecash wallet*).
 2. **Drive** tab → tap the green **GO** button (allow location when asked).
 
 **Rider app:**

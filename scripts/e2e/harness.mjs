@@ -49,11 +49,11 @@ export async function boot({ feePpk = 0, driverRates = null } = {}) {
   const browser = await chromium.launch({ args: ["--no-sandbox"] });
   const errors = [];
 
-  // Seed a driver's profile (photo, vehicle, Lightning address) so the app lets them drive. More drivers: seedDriver(h.newKeys(), { name, gender }).
-  const seedDriver = (kp, { name = "Dina Driver", gender, rates = driverRates } = {}) => {
+  // Seed a driver's profile (photo, vehicle, Lightning address; lud16: "" leaves it out) so the app lets them drive. More drivers: seedDriver(h.newKeys(), { name, gender }).
+  const seedDriver = (kp, { name = "Dina Driver", gender, rates = driverRates, lud16 = "dina@example.com" } = {}) => {
     const sk = kp.sk, pk = kp.publicKey;
     relay.inject(Ev.buildSignedEvent(K.METADATA, {
-      name, about: "NostrRide user", communication: [], picture: JPEG, lud16: "dina@example.com", ...(gender ? { gender } : {}), ...(rates ? { rates } : {}),
+      name, about: "NostrRide user", communication: [], picture: JPEG, ...(lud16 ? { lud16 } : {}), ...(gender ? { gender } : {}), ...(rates ? { rates } : {}),
       vehicle: Priv.sealVehicle({ year: "2020", make: "Toyota", model: "Prius", picture: JPEG, plateState: "KY", plateNumber: "ABC123" }, sk, pk),
     }, [], sk));
     return kp;

@@ -1,7 +1,6 @@
 // ════════════════════════════════════════════════════════════
 //  CHECKLIST — What a driver still needs before going online (isDriveReady):
-//  face photo, vehicle, vehicle photo, plate, cash out location
-//  address. Each row says done, or names exactly what is missing and
+//  face photo, vehicle, vehicle photo, plate. Each row says done, or names exactly what is missing and
 //  jumps to the Account tab where it is filled in.
 // ════════════════════════════════════════════════════════════
 
@@ -14,7 +13,6 @@ const STEPS = [
   { id: "vehicle", title: "Vehicle", hint: "Year, make and model of your car." },
   { id: "vehiclePhoto", title: "Vehicle photo", hint: "A clear photo of your car." },
   { id: "plate", title: "License plate", hint: "Shown only to the rider you drive." },
-  { id: "lightning", title: "Cash out location", hint: "A Lightning address, like you@wallet.com." },
 ];
 
 export function driveSteps(user) {

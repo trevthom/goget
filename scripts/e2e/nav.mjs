@@ -4,6 +4,7 @@
 //   • the back arrow goes one screen back; Cancel / X cancel the planning and show the home screen
 //   • the pickup can be pinned (drag the map under the pin) or typed (a business name)
 //   • the DROP-OFF can be pinned on the map too ("Set drop-off on the map"); with both places set the quote opens
+//   • the search page shows no button and no choice until a field is active; then the map button of THAT field comes first, with that field's 3 most recent places below it
 //   • a driver whose phone gives only an APPROXIMATE location (accuracy 3 km) can go online and be seen by the rider
 // Takes about a minute. The pages are styled like the real app (Tailwind is built into the app CSS).
 import { boot, sleep, PICKUP } from "./harness.mjs";
@@ -88,6 +89,7 @@ try {
 
   await step("the rider pins the pickup on the map; the pin page has Back and Close", async () => {
     await openSearch();
+    await R.getByLabel("Pickup location").click();
     await tap(R.getByRole("button", { name: /Set pickup on the map/ }));
     await R.getByText("Pickup spot").waitFor({ timeout: 10000 });
     await R.getByText("100 Main St, Lexington").first().waitFor({ timeout: 15000 });
@@ -166,6 +168,7 @@ try {
     const lookups = [];
     R.on("request", (r) => { const u = r.url(); if (/photon\.komoot\.io\/reverse/.test(u)) lookups.push(new URL(u).searchParams.get("lat")); });
     await openSearch();
+    await R.getByLabel("Pickup location").click();
     await tap(R.getByRole("button", { name: /Set pickup on the map/ }));
     await R.getByText("Pickup spot").waitFor({ timeout: 10000 });
     await R.getByText("100 Main St, Lexington").first().waitFor({ timeout: 15000 });
@@ -179,6 +182,32 @@ try {
     if (after === before) throw new Error("no new address lookup after the drag: " + lookups.join(","));
     if (!(Number(after) > Number(before))) throw new Error(`dragging the map down should move the pin north: ${before} -> ${after}`);
     log("     lookups:", lookups.join(", "));
+  });
+
+  await step("search page: nothing but the two fields until one is active; then that field's map button first, its recent places below", async () => {
+    await tap(R.getByRole("button", { name: "Close and go home" }));
+    await home(R).waitFor({ timeout: 5000 });
+    await openSearch();
+    await R.getByRole("button", { name: /Set pickup on the map/ }).waitFor({ timeout: 3000 }); // the cursor starts in the pickup field
+    if (await R.getByRole("button", { name: /Set drop-off on the map/ }).count()) throw new Error("the drop-off map button shows while the pickup field is active");
+    const recent = R.getByRole("button", { name: /100 Main St/ });
+    await recent.first().waitFor({ timeout: 5000 });
+    if ((await recent.count()) > 3) throw new Error("more than 3 recent places: " + (await recent.count()));
+    // the order on the page: the map button, then the recent places
+    const order = await R.evaluate(() => [...document.querySelectorAll("button")].map((b) => b.innerText.replace(/\s+/g, " ").trim()).filter((t) => /Set pickup on the map|100 Main St/.test(t)).slice(0, 2));
+    if (!/Set pickup on the map/.test(order[0] || "") || !/100 Main St/.test(order[1] || "")) throw new Error("wrong order: " + JSON.stringify(order));
+    // the drop-off field: its own button
+    await R.getByLabel("Where to?").click();
+    await R.getByRole("button", { name: /Set drop-off on the map/ }).waitFor({ timeout: 3000 });
+    if (await R.getByRole("button", { name: /Set pickup on the map/ }).count()) throw new Error("the pickup map button shows while the drop-off field is active");
+    // no cursor in either field: no button, no choice
+    await R.evaluate(() => document.activeElement?.blur());
+    await sleep(500);
+    for (const re of [/Set pickup on the map/, /Set drop-off on the map/, /100 Main St/, /Your location|Locating/, /^Done$/]) {
+      if (await R.getByRole("button", { name: re }).count()) throw new Error("a button shows with no active field: " + re);
+    }
+    await R.getByLabel("Pickup location").click();
+    await R.getByRole("button", { name: /Set pickup on the map/ }).waitFor({ timeout: 3000 });
   });
 
   const unstyled = await h.missingStyles(R, "rider");
