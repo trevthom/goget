@@ -102,5 +102,28 @@ const refuse = (ride, tick) => signAs(driver, K.RIDE_TICK_REPLY, { tickId: tick.
   const later = await recoverRefused({ request: ride, user: rider, ecash: riderW, nowMs: Date.now() + 60000 });
   assert.equal(later.recovered, 1, "tried again later: the token comes back");
 }
+// ── 4. A refund (waiver) is redeemed only at the mint the ride was agreed at ──
+{
+  const { redeemWaiversFor } = await import(`${R}/features/payments/redeemWaivers.js`);
+  const OTHER = "https://other.test";
+  const net = newNet();
+  net[OTHER] = { n: 1, quotes: {}, spent: new Set(), paidInvoices: [], failMelt: false, down: false };
+  const riderW = build(net), driverW = build(net);
+  await topUp(driverW, net, 5000);
+  await topUp(driverW, net, 5000, OTHER);
+  const ride = newRide("d");
+  const good = await driverW.pay(MINT, 300);
+  const bad = await driverW.pay(OTHER, 300);
+  const w1 = Pay.waiverEvent(ride, driver, { forgivenSats: 0, refundSats: 300, token: bad.token, reason: "sorry" });
+  signAs(driver, w1.kind, w1.content, w1.tags);
+  const got1 = await redeemWaiversFor({ user: rider, ecash: riderW, rideRequests: [ride] });
+  assert.equal(got1.length, 0, "a refund from a mint the ride was not agreed at is not redeemed");
+  assert.equal(riderW.balance(OTHER), 0, "so nothing appears at the driver's other mint");
+  const w2 = Pay.waiverEvent(ride, driver, { forgivenSats: 0, refundSats: 300, token: good.token, reason: "sorry again" });
+  signAs(driver, w2.kind, w2.content, w2.tags, Date.now() + 5000);
+  const got2 = await redeemWaiversFor({ user: rider, ecash: riderW, rideRequests: [ride] });
+  assert.equal(got2.length, 1, "a refund at the ride's mint is");
+  assert.ok(riderW.balance(MINT) > 0);
+}
 console.log("refusal checks passed");
 process.exit(0);
