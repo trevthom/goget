@@ -60,7 +60,7 @@ const miles = (a, b) => haversineDistance(a.lat, a.lng, b.lat, b.lng);
 
 export default function OnTrip({ request, trip }) {
   const { user, pushNotice, btcPrice, usdPrice, ecash } = useApp();
-  const { finishRide, myPosition, gps, share, shareUpdate, confirmRide, money, reportMiles, payMint, screenMayDim } = useRider();
+  const { finishRide, myPosition, gps, share, shareUpdate, confirmRide, money, allowMore, reportMiles, payMint, screenMayDim } = useRider();
   const driverPubkey = rideDriver(request);
   const stage = rideStage(request);
   const offer = offerFrom(request, driverPubkey);
@@ -137,7 +137,7 @@ export default function OnTrip({ request, trip }) {
 
   // Time and distance so far (the same on the driver's screen). The rider's own GPS figure is used inside
   // the code only (lib/meter.js); it is sent to the driver's app, so both screens agree.
-  const meter = useRiderMeter({ request, stage, loc, pos: myPosition });
+  const meter = useRiderMeter({ request, stage, loc, pos: myPosition, quotedMiles: (() => { try { return JSON.parse(request.content).distanceMiles; } catch { return null; } })() });
   useEffect(() => { reportMiles(meter.tripMiles); }, [meter.tripMiles, reportMiles]);
   const view = meterView({ stage, times: rideTimes(request), nowMs: Date.now(), pickupMiles: meter.pickupMiles, tripMiles: meter.tripMiles });
   const latestMeter = useRef(meter);
@@ -299,6 +299,13 @@ export default function OnTrip({ request, trip }) {
                 <p className="text-sm font-semibold">Your ecash wallet is short by {moneyText(Math.max(1, money.shortSats || money.due), btcPrice)}.</p>
                 <p className="text-xs mt-0.5">If two payments are missed, your driver may finish the ride. Add funds and everything missed is paid at once.</p>
                 <Button size="md" className="mt-2" onClick={() => setAdding(true)}><Icon name="zap" size={16} /> Add funds</Button>
+              </div>
+            )}
+            {money?.status === "capped" && (
+              <div className="mt-2 rounded-xl bg-amber-50 text-amber-800 px-3 py-2" role="alert">
+                <p className="text-sm font-semibold">Payments paused at {moneyText(money.capSats, btcPrice)}.</p>
+                <p className="text-xs mt-0.5">This ride has already cost much more than expected. {moneyText(money.held, btcPrice)} more is due. Your driver sees missed payments and may finish the ride. If the fare is right, allow more.</p>
+                <Button size="md" className="mt-2" onClick={() => allowMore(request)}>Allow more</Button>
               </div>
             )}
             {money?.status === "error" && <p className="mt-2 text-xs text-red-700" role="alert">A payment did not go through: {money.message}</p>}
