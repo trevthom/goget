@@ -27,6 +27,7 @@ import CurrencySection from "../../features/profile/CurrencySection.jsx";
 import KeysSection from "../../features/profile/KeysSection.jsx";
 import Icon from "../../ui/Icon.jsx";
 import Fold from "../../ui/Fold.jsx";
+import BackupSection from "../../features/profile/BackupSection.jsx";
 import { RecoveryFold, RecoveryNotice } from "../../features/ecash/RecoverySection.jsx";
 
 const GENDERS = [["", "Not set"], ["female", "Female"], ["male", "Male"]];
@@ -72,6 +73,7 @@ export default function AccountScreen() {
           <Fold id="rates" title="Your rates"><TypicalFareSection rates={user.rates} onSave={(rates) => save({ rates })} locked={onRide} /></Fold>
           <Fold id="ecash" title="Ecash wallet"><EcashSection locked={onRide} /></Fold>
           <RecoveryFold />
+          <Fold id="backup" title="Backup"><BackupSection /></Fold>
 
           <Fold id="gender" title="Gender (optional)">
             <p className="text-sm text-neutral-500 mb-2">
