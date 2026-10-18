@@ -313,6 +313,44 @@ pub(D.confirmEvent(junkWay, c2.publicKey, "delivered", { verified: "trust me" })
 assert.equal(D.deliveryVerified(junkWay), null, "only the two known ways are read");
 assert.ok(!relay.query({ kinds: [K.DELIVERY_STAGE] }).some((e) => e.content.includes("38.1") || e.content.includes("BBBB")), "neither the photo nor the position is public");
 
+// ── A bid expires after 14 days ──
+{
+  assert.equal(D.BID_TTL_MS, 14 * 86400000);
+  const rq = pub(D.requestEvent(user(ship), form({ time: new Date(Date.now() + 30 * 86400000).toISOString() })), ship); // a delivery 30 days ahead: the request outlives the bids
+  const old = (who, price, ageDays) => {
+    const b = D.bidEvent(rq, user(who), { priceSats: price, etaMinutes: 10, note: "", cdl: { has: false }, vehicle: "", mint: MINT, upfrontPct: 50 });
+    const e = buildSignedEvent(b.kind, b.content, [...b.tags, ["t", "nostrride"]], who.sk);
+    e.created_at = Math.floor(Date.now() / 1000) - Math.round(ageDays * 86400);
+    relay._store(e);
+    return e;
+  };
+  old(c1, 1000, 13); // 13 days old: still good
+  old(c2, 2000, 14.5); // 14.5 days old: expired half a day ago
+  const [fresh] = D.allBids(rq).filter((b) => b.courier === c1.publicKey);
+  const [stale] = D.allBids(rq).filter((b) => b.courier === c2.publicKey);
+  assert.equal(D.isBidExpired(fresh), false); assert.equal(D.isBidExpired(stale), true);
+  assert.equal(D.bidState(rq, fresh), "pending"); assert.equal(D.bidState(rq, stale), "expired", "the request is open but the bid ran out");
+  assert.deepEqual(D.pendingBids(rq).map((b) => b.courier), [c1.publicKey], "an expired bid cannot be picked");
+  assert.equal(D.bidInbox([rq], ship.publicKey)[0].bids.length, 1);
+  assert.throws(() => D.acceptEvents(rq, user(ship), stale, D.exactDelivery(rq, user(ship))), /expired/, "and cannot be accepted");
+  assert.equal(D.waitingBidsFor([rq], c2.publicKey).length, 0, "it is not a waiting bid any more");
+  const mineC2 = D.bidsOfCourier([rq], c2.publicKey);
+  assert.equal(mineC2.length, 1, "but the courier still sees it, as expired, for a day after");
+  assert.equal(mineC2[0].state, "expired");
+  assert.ok(D.bidExpiresAt(fresh) - Date.now() < 2 * 86400000, "the 13-day-old bid has about a day left");
+  // bidding again renews it
+  bid(rq, c2, { priceSats: 2000 });
+  assert.equal(D.bidState(rq, D.allBids(rq).find((b) => b.courier === c2.publicKey)), "pending", "a new bid starts a new 14 days");
+  // a bid dated in the future would never run out: ignored
+  const future = buildSignedEvent(K.DELIVERY_BID, { priceSats: 5, etaMinutes: 1, note: "", cdl: { has: false }, vehicle: "", mint: MINT, upfrontPct: 50 }, [["e", rq.id], ["p", ship.publicKey], ["d", "bid-x"], ["t", "nostrride"]], c3.sk);
+  future.created_at = Math.floor(Date.now() / 1000) + 86400 * 365; relay._store(future);
+  assert.equal(D.allBids(rq).some((b) => b.courier === c3.publicKey), false, "a bid from the future is not read");
+  // the accepted bid is frozen: it does not expire once chosen
+  const [a14, v14] = D.acceptEvents(rq, user(ship), fresh, D.exactDelivery(rq, user(ship)));
+  pub(a14, ship); pub(v14, ship);
+  assert.equal(D.bidState(rq, fresh), "accepted");
+}
+
 // ── The shipper can close a request nobody took ──
 const req5 = pub(D.requestEvent(user(ship), form()), ship);
 bid(req5, c2, {});

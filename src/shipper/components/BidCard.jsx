@@ -13,6 +13,7 @@ import { getProfile } from "../../nostr/profiles.js";
 import { shortNpub } from "../../nostr/keys.js";
 import { mintLabel } from "../../lib/mints.js";
 import { cdlText } from "../../lib/cdl.js";
+import { bidExpiresAt } from "../../lib/delivery.js";
 import { splitSats, neededToAccept } from "../../lib/deliveryPay.js";
 import Avatar from "../../ui/Avatar.jsx";
 import VouchBadge from "../../ui/VouchBadge.jsx";
@@ -36,6 +37,7 @@ export default function BidCard({ request, bid }) {
   const { upfront } = splitSats(bid.priceSats, bid.upfrontPct);
   const cdl = cdlText(bid.cdl);
   const { have } = fundsFor(bid);
+  const daysLeft = Math.max(1, Math.ceil((bidExpiresAt(bid) - Date.now()) / 86400000));
 
   const accept = async () => {
     setAsk(false); setBusy(true); setMsg("");
@@ -64,7 +66,7 @@ export default function BidCard({ request, bid }) {
       )}
       {bid.note && <p className="mt-2 text-[15px] whitespace-pre-wrap bg-neutral-100 rounded-xl px-3 py-2">{bid.note}</p>}
       <p className="text-xs text-neutral-500 mt-2">
-        {upfront > 0 ? `${bid.upfrontPct}% (${moneyText(upfront, btcPrice)}) is paid when you hand over the parcel; the rest when it arrives.` : "Nothing is paid until the parcel arrives."} Paid in ecash at {mintLabel(bid.mint)}.
+        {upfront > 0 ? `${bid.upfrontPct}% (${moneyText(upfront, btcPrice)}) is paid when you hand over the parcel; the rest when it arrives.` : "Nothing is paid until the parcel arrives."} Paid in ecash at {mintLabel(bid.mint)}. This bid is good for {daysLeft} more day{daysLeft === 1 ? "" : "s"}.
       </p>
       {msg && <p className="text-sm text-red-600 mt-2" role="alert">{msg}</p>}
       <div className="flex gap-2 mt-3">

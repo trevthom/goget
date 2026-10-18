@@ -85,6 +85,8 @@ The full description is in [`index.md`](index.md).
 
 A request stays open for 12 hours (ASAP), or until 12 hours after the pickup time (later). Nobody takes it? It expires by itself.
 
+A **bid** is good for **14 days**. The Bids tab shows how many days a bid has left. After 14 days the shipper can no longer pick it. The courier sees it as *Expired: bid again* under My jobs and can send it again to renew it. A bid the shipper already accepted does not expire.
+
 ### Bids tab
 Couriers bid. Each bid shows the courier's photo and name, your vouch badge (if your vouches know them), the price, how soon they can be at the pickup, what they drive, their CDL statement, and their notes.
 - The tab shows a **number** when bids are waiting. Nothing has to be decided at once.
@@ -122,7 +124,7 @@ You can change your bid or take it back until the shipper chooses.
 
 ### My jobs tab
 - **Deliveries** — the jobs the shipper gave you. A number on the tab shows how many.
-- **My bids** — waiting, chosen, declined (the shipper turned it down, or took another bid), or expired.
+- **My bids** — waiting (with the days left), chosen, declined (the shipper turned it down, or took another bid), or expired (14 days passed: tap it and *Bid again*).
 
 ### Doing a job
 1. Open the job. You now see the **exact addresses** and the shipper's note. *Open in a maps app* starts navigation.

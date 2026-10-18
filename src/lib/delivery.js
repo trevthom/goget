@@ -16,6 +16,8 @@
 //                                      "gps+photo" (the proof held up) or "outside" (the shipper verified it outside of GoGet).
 //  Status (deliveryStatus): requested → assigned → in_transit → delivered → completed;  disputed (the shipper reported a problem);  closed
 //  (the shipper closed it, or the courier withdrew before pickup: nothing was paid).  A request nobody took expires (deliveryExpiryMs).
+//  A BID expires 14 days after it was signed (BID_TTL_MS): the shipper can no longer pick it and the courier sees "Expired" and may bid
+//  again (a new bid is a new signature, so it starts a new 14 days). The bid the shipper accepted is frozen and never expires.
 //
 //  Trust rules: versions of a request = same author + d-tag; only the shipper authors versions, so the courier they name is trustworthy.
 //  A bid counts from anyone except the shipper; an accept, a decline, a confirm and a payment only from the shipper; a stage and a payment
@@ -34,6 +36,7 @@ import { haversineDistance } from "./geo.js";
 
 const HOUR = 3600000;
 export const DELIVERY_TTL_MS = 12 * HOUR; // an ASAP request lives 12 h; a timed one until 12 h after its pickup time
+export const BID_TTL_MS = 14 * 24 * HOUR; // a bid is good for 14 days; after that the courier must bid again
 export const MAX_NOTE = 500;
 export const UPFRONT_CHOICES = [0, 25, 50, 75]; // % of the price paid when the parcel is handed over
 export const DEFAULT_UPFRONT = 50;
@@ -121,6 +124,7 @@ export function isScheduledDelivery(request, now = Date.now()) {
 export function readBid(e, shipper) {
   const c = parse(e);
   if (!c || e.pubkey === shipper) return null;
+  if (e.created_at * 1000 > Date.now() + 10 * 60000) return null; // a bid dated in the future would never run out
   const priceSats = intIn(c.priceSats, 1, 1e9);
   const upfrontPct = c.upfrontPct == null ? DEFAULT_UPFRONT : UPFRONT_CHOICES.includes(c.upfrontPct) ? c.upfrontPct : null;
   if (!priceSats || upfrontPct == null || !isMintUrl(c.mint)) return null;
@@ -167,7 +171,11 @@ export function acceptedBid(request) {
   return bid;
 }
 
-// "pending" | "accepted" | "declined" | "closed" | "expired" for one bid of this request.
+// Has this bid run out (14 days after it was signed)? An accepted bid is frozen and is not asked.
+export const bidExpiresAt = (bid) => bid.at + BID_TTL_MS;
+export const isBidExpired = (bid, now = Date.now()) => now > bidExpiresAt(bid);
+
+// "pending" | "accepted" | "declined" | "closed" | "expired" for one bid of this request ("expired" = the request ran out, or the bid did).
 export function bidState(request, bid) {
   const status = deliveryStatus(request);
   const accepted = acceptedBid(request);
@@ -176,6 +184,7 @@ export function bidState(request, bid) {
   if (status === "closed") return "closed";
   if (isDeliveryExpired(request)) return "expired";
   if (declinedBidIds(request).has(bid.id)) return "declined";
+  if (isBidExpired(bid)) return "expired";
   return "pending";
 }
 
@@ -186,7 +195,7 @@ export function pendingBids(request, { blocked = [] } = {}) {
   const declined = declinedBidIds(request);
   const hidden = new Set(blocked.map((b) => b.pubkey));
   return allBids(request)
-    .filter((b) => !declined.has(b.id) && !hidden.has(b.courier) && meetsCdl(b.cdl, need))
+    .filter((b) => !declined.has(b.id) && !hidden.has(b.courier) && !isBidExpired(b) && meetsCdl(b.cdl, need))
     .sort((a, b) => a.priceSats - b.priceSats || a.etaMinutes - b.etaMinutes || a.at - b.at);
 }
 
@@ -313,7 +322,8 @@ export function bidsOfCourier(requests, me, now = Date.now()) {
     const bid = allBids(r).find((b) => b.courier === me);
     if (!bid) continue;
     const state = bidState(r, bid);
-    if (state !== "pending" && state !== "accepted" && now - bid.at > 86400000) continue;
+    // A finished bid stays on the list for a day: after it was signed, or (a bid that ran out) after it expired.
+    if (state !== "pending" && state !== "accepted" && now - (state === "expired" && !isDeliveryExpired(r, now) ? bidExpiresAt(bid) : bid.at) > 86400000) continue;
     out.push({ request: r, bid, state });
   }
   return out.sort((a, b) => b.bid.at - a.bid.at);
@@ -384,6 +394,7 @@ export function bidEvent(request, user, { priceSats, etaMinutes, note, cdl, vehi
 
 // The shipper takes `bid`: the accept (exact places sealed to the courier) AND the new request version. Returns [acceptEvent, versionEvent].
 export function acceptEvents(request, user, bid, exact) {
+  if (isBidExpired(bid)) throw new Error("This bid has expired.");
   const latest = deliveryVersions(request)[0] || request;
   const accept = {
     kind: K.DELIVERY_ACCEPT,

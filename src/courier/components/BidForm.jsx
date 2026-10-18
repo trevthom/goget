@@ -15,7 +15,7 @@ import Button from "../../ui/Button.jsx";
 import VouchBadge from "../../ui/VouchBadge.jsx";
 import { moneyText } from "../../ui/Money.jsx";
 import { cdlText, needText } from "../../lib/cdl.js";
-import { deliveryContent, deliveryNeed, typeLabel, sizeLabel, MAX_NOTE, UPFRONT_CHOICES, DEFAULT_UPFRONT } from "../../lib/delivery.js";
+import { deliveryContent, deliveryNeed, isBidExpired, typeLabel, sizeLabel, MAX_NOTE, UPFRONT_CHOICES, DEFAULT_UPFRONT } from "../../lib/delivery.js";
 import { mintLabel } from "../../lib/mints.js";
 import { getProfile } from "../../nostr/profiles.js";
 import { shortNpub } from "../../nostr/keys.js";
@@ -85,10 +85,10 @@ export default function BidForm({ request, existing, onClose }) {
         <p className="font-medium">{cdlText(cdl) || "No CDL"}{`${cdl.has ? " · " : ""}`}</p>
         <button type="button" onClick={() => { onClose(); setView("account"); }} className="text-xs font-semibold underline">Change in Account → Courier details</button>
       </div>
-      <p className="text-xs text-neutral-500 mt-2">You are paid in ecash at {mintLabel(mint)}.{!ready ? " Connect your ecash wallet first." : ""}</p>
+      <p className="text-xs text-neutral-500 mt-2">You are paid in ecash at {mintLabel(mint)}.{!ready ? " Connect your ecash wallet first." : ""} A bid is good for 14 days. Send it again to renew it.</p>
 
       {error && <p className="text-sm text-red-600 mt-2" role="alert">{error}</p>}
-      <Button className="mt-4" onClick={send} loading={busy} disabled={!sats || !ready}>{existing ? "Update bid" : "Send bid"}</Button>
+      <Button className="mt-4" onClick={send} loading={busy} disabled={!sats || !ready}>{existing ? (isBidExpired(existing) ? "Bid again" : "Update bid") : "Send bid"}</Button>
       {existing && <Button className="mt-2" variant="outline" onClick={async () => { await withdrawBid(request, existing); onClose(); }}>Take my bid back</Button>}
     </Modal>
   );

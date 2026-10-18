@@ -20,7 +20,7 @@ import { haversineDistance } from "../../lib/geo.js";
 import { getDrivingRoute, metersToMiles } from "../../lib/routing.js";
 import { hideList } from "../../lib/blocks.js";
 import { attemptGate, recordAttempt, checkCode } from "../../lib/startcode.js";
-import { acceptEvents, bidInbox, confirmEvent, declineBidEvent, deliveriesOf, deliveryCourier, deliveryStatus, exactDelivery, isRunning, pickupCode, requestEvent, versionEvent } from "../../lib/delivery.js";
+import { acceptEvents, bidInbox, confirmEvent, declineBidEvent, deliveriesOf, deliveryCourier, deliveryStatus, exactDelivery, isBidExpired, isRunning, pickupCode, requestEvent, versionEvent } from "../../lib/delivery.js";
 import { neededToAccept, dueNow } from "../../lib/deliveryPay.js";
 import { payDelivery } from "../../features/payments/payDelivery.js";
 import { moneyText } from "../../ui/Money.jsx";
@@ -108,6 +108,7 @@ export function ShipperProvider({ children }) {
   const fundsFor = useCallback((bid) => ({ have: ecash ? ecash.balance(bid.mint) : 0, need: neededToAccept(bid) }), [ecash]);
   const acceptBid = useCallback(async (request, bid) => {
     if (ecashOff || !ecash) return { ok: false, message: "Connect your ecash wallet first (Account → Ecash wallet)." };
+    if (isBidExpired(bid)) return { ok: false, message: "This bid has expired. Ask the courier to bid again." };
     const { have, need } = fundsFor(bid);
     if (have < need) return { ok: false, short: need - have, message: `You need ${moneyText(need, btcPrice)} in ecash at this courier's mint. You have ${moneyText(have, btcPrice)}.` };
     const exact = exactDelivery(request, user);

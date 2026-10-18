@@ -11,9 +11,9 @@ import Icon from "../../ui/Icon.jsx";
 import Money from "../../ui/Money.jsx";
 import JobDetail from "./JobDetail.jsx";
 import BidForm from "../components/BidForm.jsx";
-import { acceptedBid, deliveryContent, deliveryStatus, placesOf, sizeLabel, typeLabel } from "../../lib/delivery.js";
+import { acceptedBid, bidExpiresAt, deliveryContent, deliveryStatus, placesOf, sizeLabel, typeLabel } from "../../lib/delivery.js";
 
-const BID_WORDS = { pending: ["Waiting for the shipper", "bg-amber-50 text-amber-800"], accepted: ["Chosen", "bg-[#e6f4ec] text-[#05683a]"], declined: ["Declined", "bg-neutral-100 text-neutral-600"], closed: ["Closed", "bg-neutral-100 text-neutral-600"], expired: ["Expired", "bg-neutral-100 text-neutral-600"] };
+const BID_WORDS = { pending: ["Waiting for the shipper", "bg-amber-50 text-amber-800"], accepted: ["Chosen", "bg-[#e6f4ec] text-[#05683a]"], declined: ["Declined", "bg-neutral-100 text-neutral-600"], closed: ["Closed", "bg-neutral-100 text-neutral-600"], expired: ["Expired: bid again", "bg-neutral-100 text-neutral-600"] };
 const JOB_WORDS = { assigned: "Go to the pickup", in_transit: "On the way to the drop-off", delivered: "Waiting for the shipper", disputed: "The shipper reported a problem" };
 
 export default function MineScreen() {
@@ -63,12 +63,13 @@ export default function MineScreen() {
             const c = deliveryContent(request), [label, tone] = BID_WORDS[state] || BID_WORDS.closed;
             return (
               <li key={bid.id}>
-                <button type="button" disabled={state !== "pending"} onClick={() => setEditing(request.id)} className="w-full text-left rounded-2xl border border-neutral-200 p-4 enabled:active:bg-neutral-50" aria-label={`Your bid on ${c.dropoff?.name}: ${label}`}>
+                <button type="button" disabled={state !== "pending" && state !== "expired"} onClick={() => setEditing(request.id)} className="w-full text-left rounded-2xl border border-neutral-200 p-4 enabled:active:bg-neutral-50" aria-label={`Your bid on ${c.dropoff?.name}: ${label}`}>
                   <div className="flex items-center gap-2">
                     <span className="font-semibold truncate">{typeLabel(c.what?.type)} · {c.dropoff?.name}</span>
                     <span className={`ml-auto shrink-0 text-[11px] px-2 py-0.5 rounded-full font-semibold ${tone}`}>{label}</span>
                   </div>
                   <p className="text-sm text-neutral-600 mt-1">Your bid: <Money sats={bid.priceSats} className="font-semibold" />{bid.note ? ` · “${bid.note.slice(0, 60)}${bid.note.length > 60 ? "…" : ""}”` : ""}</p>
+                  {state === "pending" && <p className="text-xs text-neutral-500 mt-0.5">Good for {Math.max(1, Math.ceil((bidExpiresAt(bid) - Date.now()) / 86400000))} more day(s). Then it expires.</p>}
                 </button>
               </li>
             );
