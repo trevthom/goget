@@ -19,7 +19,7 @@ import Avatar from "../../ui/Avatar.jsx";
 import VouchBadge from "../../ui/VouchBadge.jsx";
 import Money, { moneyText } from "../../ui/Money.jsx";
 import Button from "../../ui/Button.jsx";
-import Icon from "../../ui/Icon.jsx";
+import CdlBadge from "../../ui/CdlBadge.jsx";
 import { ConfirmDialog } from "../../ui/Parts.jsx";
 import AddFunds from "../../features/payments/AddFunds.jsx";
 
@@ -61,9 +61,7 @@ export default function BidCard({ request, bid }) {
           <Money sats={bid.priceSats} stacked className="text-xl font-extrabold" />
         </div>
       </div>
-      {cdl && (
-        <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-neutral-100 text-xs font-semibold px-2.5 py-1"><Icon name="truck" size={13} /> {cdl}</p>
-      )}
+      {cdl && <CdlBadge pubkey={bid.courier} claim={bid.cdl} />}
       {bid.note && <p className="mt-2 text-[15px] whitespace-pre-wrap bg-neutral-100 rounded-xl px-3 py-2">{bid.note}</p>}
       <p className="text-xs text-neutral-500 mt-2">
         {upfront > 0 ? `${bid.upfrontPct}% (${moneyText(upfront, btcPrice)}) is paid when you hand over the parcel; the rest when it arrives.` : "Nothing is paid until the parcel arrives."} Paid in ecash at {mintLabel(bid.mint)}. This bid is good for {daysLeft} more day{daysLeft === 1 ? "" : "s"}.

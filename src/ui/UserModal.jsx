@@ -15,6 +15,7 @@ import { personStats, fmtMiles } from "../lib/stats.js";
 import { IS_GOGET } from "../config/app.js";
 import Avatar from "./Avatar.jsx";
 import VouchBadge from "./VouchBadge.jsx";
+import CdlBadge from "./CdlBadge.jsx";
 import Icon from "./Icon.jsx";
 import BlockButton from "./BlockButton.jsx";
 
@@ -68,6 +69,7 @@ export default function UserModal() {
         </div>
         <h2 className="text-2xl font-bold">{name}</h2>
         <div className="flex justify-center"><VouchBadge pubkey={profileModalPubkey} /></div>
+        {IS_GOGET && p?.courier?.cdl?.has && <div className="flex flex-col items-center"><CdlBadge pubkey={profileModalPubkey} claim={p.courier.cdl} canVouch /></div>}
 
         {/* Always show every role, even at zero. */}
         <div className="flex justify-center gap-6 mt-4 text-sm">

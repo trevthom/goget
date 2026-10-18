@@ -157,6 +157,10 @@ A vouch means "I know and trust this person." Add people under **Account → You
 When you look at a courier, a shipper, a driver or a passenger, GoGet shows **"N of your vouches know and trust this person"**. It counts only people *you* chose. It goes one step and no further. If it shows nothing, none of your vouches know them.
 There are no stars and no reviews.
 
+### Vouching for a CDL
+A courier's CDL and endorsements are the courier's own word. Nobody checks them. If you have **seen the license**, you can vouch for it. Tap the courier's name or photo, then **I have seen this CDL**, tick the endorsements you saw, and confirm. Your vouch is public. You can change it or take it back at any time.
+When you look at a courier's bid or card, GoGet shows **"CDL with H, T confirmed by 2 of your vouches"**. Like person vouches, it counts only you and the people *you* vouch for, one step and no further. An endorsement that nobody you trust confirmed has no tick. Vouch only for what you saw. A courier sees who vouched for their CDL under Account → Courier details.
+
 ---
 
 ## 9. Trust and safety

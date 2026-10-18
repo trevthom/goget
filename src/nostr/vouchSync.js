@@ -2,6 +2,7 @@
 //  VOUCH SYNC — Brings into the cache what the badge needs (lib/vouches.js): MY vouch list, and the lists of the people I
 //  vouch for (their lists are how I learn who they know and trust), plus their names. Nothing else is read: the app never
 //  scans everyone's lists. The live subscription only reaches back 24 h, so this asks the relays directly.
+//  Also read: the CDL vouches (lib/cdlvouch.js) written by me and by the people I vouch for, and the ones written about me.
 //  Run at login, every few minutes, and after the person changes their own list.
 // ════════════════════════════════════════════════════════════
 
@@ -22,4 +23,8 @@ export async function syncVouches(me) {
   for (let i = 0; i < mine.length; i += CHUNK) take(await lists(mine.slice(i, i + CHUNK)));
   // Their names, so the badge and the list can say who.
   for (let i = 0; i < mine.length; i += CHUNK) take(await relay.pool.querySync(relays, { kinds: [EVENT_KINDS.METADATA], authors: mine.slice(i, i + CHUNK) }).catch(() => []));
+  // CDL vouches ("I have seen this courier's CDL"): by me and by my vouches, then the ones about me (shown on my own Courier details).
+  const trusted = [me, ...mine];
+  for (let i = 0; i < trusted.length; i += CHUNK) take(await relay.pool.querySync(relays, { kinds: [EVENT_KINDS.CDL_VOUCH], authors: trusted.slice(i, i + CHUNK), "#t": [APP_TAG] }).catch(() => []));
+  take(await relay.pool.querySync(relays, { kinds: [EVENT_KINDS.CDL_VOUCH], "#p": [me], "#t": [APP_TAG] }).catch(() => []));
 }

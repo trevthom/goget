@@ -121,8 +121,8 @@ relay.pool.querySync = async (_relays, f) => {
 assert.equal(V.trustFor(tB.publicKey, meB.publicKey), null, "before the sync the cache knows nothing");
 await syncVouches(meB.publicKey);
 assert.deepEqual(V.trustFor(tB.publicKey, meB.publicKey).via, [cB.publicKey], "after it, the badge can be drawn");
-assert.deepEqual(asked.map((f) => [f.kinds[0], f.authors.length]), [[K.VOUCH_LIST, 1], [K.VOUCH_LIST, 1], [0, 1]], "my list, my vouches' lists, their names: three small questions");
-assert.ok(asked.every((f) => f.authors.every((a) => [meB.publicKey, cB.publicKey].includes(a))), "no one else's list is read");
+assert.deepEqual(asked.map((f) => [f.kinds[0], (f.authors || []).length]), [[K.VOUCH_LIST, 1], [K.VOUCH_LIST, 1], [0, 1], [K.CDL_VOUCH, 2], [K.CDL_VOUCH, 0]], "my list, my vouches' lists, their names, then the CDL vouches by me + my vouches and the ones about me: five small questions");
+assert.ok(asked.every((f) => (f.authors || []).every((a) => [meB.publicKey, cB.publicKey].includes(a))), "no one else's list is read");
 assert.equal(V.trustFor(tB.publicKey, nameless.publicKey) === null, true, "a person nobody of mine vouches for is not a source");
 // A relay that does not answer leaves the sync quiet.
 relay.pool.querySync = async () => { throw new Error("relay down"); };

@@ -25,6 +25,7 @@ import { statusOf, STATUS_WORDS } from "./DeliveriesScreen.jsx";
 import MapView from "../../ui/MapView.jsx";
 import Avatar from "../../ui/Avatar.jsx";
 import VouchBadge from "../../ui/VouchBadge.jsx";
+import CdlBadge from "../../ui/CdlBadge.jsx";
 import Money, { moneyText } from "../../ui/Money.jsx";
 import Button from "../../ui/Button.jsx";
 import Icon from "../../ui/Icon.jsx";
@@ -128,6 +129,7 @@ export default function DeliveryDetail({ request, onBack }) {
               <button type="button" onClick={() => openProfile(courier)} className="font-semibold text-left">{name}</button>
               <VouchBadge pubkey={courier} />
               {bid?.vehicle && <p className="text-sm text-neutral-500">{bid.vehicle}</p>}
+              {bid?.cdl?.has && <CdlBadge pubkey={courier} claim={bid.cdl} />}
             </div>
           </div>
         )}

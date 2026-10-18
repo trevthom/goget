@@ -9,12 +9,16 @@ import { useEffect, useState } from "react";
 import { useApp } from "../../state/AppContext.jsx";
 import { useSaveProfile } from "./ProfileParts.jsx";
 import { normalizeCdl, cdlText } from "../../lib/cdl.js";
+import { cdlVouchesFor } from "../../lib/cdlvouch.js";
+import { getProfile } from "../../nostr/profiles.js";
+import { shortNpub } from "../../nostr/keys.js";
 import EndorsementChips from "../goget/EndorsementChips.jsx";
 import Button from "../../ui/Button.jsx";
 import { inputCls } from "../../ui/Parts.jsx";
 
 export default function CourierSection({ locked = false }) {
-  const { user } = useApp();
+  const { user, liveTick } = useApp();
+  void liveTick; // vouches arrive from the relays
   const save = useSaveProfile();
   const saved = user.courier || {};
   const [has, setHas] = useState(!!saved.cdl?.has);
@@ -44,6 +48,14 @@ export default function CourierSection({ locked = false }) {
             <EndorsementChips value={endorsements} onChange={setEndorsements} disabled={locked} />
           </div>
         )}
+        {has && (() => {
+          const vouchers = cdlVouchesFor(user.publicKey);
+          return (
+            <p className="text-xs text-neutral-600 mt-2" data-testid="cdl-vouchers">
+              {vouchers.length ? `Vouched by ${vouchers.map((v) => `${getProfile(v.voucher)?.name || shortNpub(v.voucher)} (${v.endorsements.join(", ") || "CDL"})`).join(", ")}.` : "No one has vouched for your CDL yet. Someone who has seen it can vouch from your profile card."}
+            </p>
+          );
+        })()}
         <p className="text-xs text-neutral-500 mt-2">
           This shows on every bid you send{has ? `: “${cdlText(draft.cdl)}”` : ""}. It is your own statement. Shippers who need a CDL or an endorsement you do not list will not see their request.
         </p>
