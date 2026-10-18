@@ -71,7 +71,7 @@ export function RiderProvider({ children }) {
 
   // ── Online drivers nearby (public, coarsened presence) ──
   const [allDrivers, setAllDrivers] = useState([]);
-  useEffect(() => subscribePresence(setAllDrivers, { excludePubkey: me, viewerPubkey: me }), [me]);
+  useEffect(() => subscribePresence(setAllDrivers, { excludePubkey: me, viewerSk: user.sk }), [me]);
   const drivers = (myPosition
     ? allDrivers.filter((d) => haversineDistance(myPosition.lat, myPosition.lng, d.lat, d.lng) <= 25)
     : allDrivers).filter((d) => !isBlockedPk(d.pubkey));
@@ -239,7 +239,7 @@ export function RiderProvider({ children }) {
           time: when,
           notes,
           status: "requested",
-          hide: hideList(me, blocked), // drivers I blocked never see this request (lib/blocks.js)
+          hide: hideList(user.sk, blocked), // drivers I blocked never see this request (lib/blocks.js)
           fareMode: "standard", // every driver's own rates (older apps also knew a "flat" price; it is gone)
           fareSats, // only an estimate: the fare is each driver's rates, paid tick by tick
           suggestedSats, // what the app suggested
@@ -410,9 +410,9 @@ export function RiderProvider({ children }) {
   );
 
   // Blocking a driver while a request is open: publish the request again with the new hide list, so that driver's app stops showing it.
-  const hideNow = hideList(me, blocked).join(",");
+  const hideNow = hideList(user.sk, blocked).join(",");
   useEffect(() => {
-    const want = hideList(me, blocked);
+    const want = hideList(user.sk, blocked);
     const seen = new Set();
     reqsRef.current
       .filter((r) => r.pubkey === me && rideStatus(r) === "requested" && isOpenRide(r) && !seen.has(rideKey(r)) && seen.add(rideKey(r)))

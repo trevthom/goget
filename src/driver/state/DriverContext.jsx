@@ -126,7 +126,7 @@ export function DriverProvider({ children }) {
     const beat = () => {
       const p = posRef.current;
       // Never advertise a stale or very vague position (an approximate one is fine: it is rounded to ~100 m).
-      if (p && canBeOnline(gpsRef.current, p)) publishPresence(user, { lat: p.lat, lng: p.lng, vehicle: carLabel(user.vehicle), rates: normalizeRates(user.rates) || undefined, hide: hideList(user.publicKey, blockedRef.current) });
+      if (p && canBeOnline(gpsRef.current, p)) publishPresence(user, { lat: p.lat, lng: p.lng, vehicle: carLabel(user.vehicle), rates: normalizeRates(user.rates) || undefined, hide: hideList(user.sk, blockedRef.current) });
     };
     beat();
     const id = setInterval(beat, PRESENCE_EVERY_MS);
@@ -165,7 +165,7 @@ export function DriverProvider({ children }) {
       publishRideLocation(user, riderPubkey, { ...myPosition, ...odo.milesRef.current });
     } else if (visible && canBeOnline(gps, myPosition) && now - lastNativeSend.current.presence > 15000) {
       lastNativeSend.current.presence = now;
-      publishPresence(user, { lat: myPosition.lat, lng: myPosition.lng, vehicle: carLabel(user.vehicle), rates: normalizeRates(user.rates) || undefined, hide: hideList(user.publicKey, blockedRef.current) });
+      publishPresence(user, { lat: myPosition.lat, lng: myPosition.lng, vehicle: carLabel(user.vehicle), rates: normalizeRates(user.rates) || undefined, hide: hideList(user.sk, blockedRef.current) });
     }
   }, [myPosition]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -196,7 +196,7 @@ export function DriverProvider({ children }) {
 
   const open = rideRequests
     .filter((r) => r.pubkey !== me && !isBlockedPk(r.pubkey) && rideStatus(r) === "requested")
-    .filter((r) => !hidesMe(parse(r)?.hide, r.pubkey, me)) // the rider blocked me: this request never shows up for me
+    .filter((r) => !hidesMe(parse(r)?.hide, r.pubkey, user.sk)) // the rider blocked me: this request never shows up for me
     .filter((r) => !isRideExpired(parse(r), r.created_at))
     .filter((r) => !declinedDrivers(r).has(me)) // the rider turned my offer down: it does not come back
     .filter((r) => !declined.includes(r.id))
