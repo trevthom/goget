@@ -17,6 +17,7 @@ node scripts/e2e/nav.mjs             # tab bar always visible, back arrow, X to 
 node scripts/e2e/recovery.mjs        # Account sections open and close (and are remembered); write down the 12 recovery words; a fresh browser restores the ecash from them; no phrase on any relay
 node scripts/e2e/disconnect.mjs      # the ecash wallet disconnected from the device: a driver's GO is off and says why; Connect makes a new empty wallet
 node scripts/e2e/goget.mjs         # GoGet: the context picker and slogan; Shipping posts a delivery needing a CDL endorsement; a courier without it does not see it; two bids, the Bids tab number, accepting one declines the other; the 4-digit pickup code; both halves of the ecash payment; a photo of the delivery; switching to Passenger and Taxi Driver
+node scripts/e2e/backup.mjs         # the account backup: a second fresh browser with the same secret key gets the role, dark mode, the blocked person and the read notice back; the relay holds only noise
 node scripts/e2e/send.mjs            # sending ecash (a token, a Lightning invoice or address) and "Automatically cash out at"
 node scripts/e2e/appearance.mjs      # dark mode saves the moment it is flipped (both apps) and survives a reload without a white flash; the password eye on Remember me and Unlock
 ```

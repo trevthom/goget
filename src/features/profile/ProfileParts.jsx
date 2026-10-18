@@ -91,8 +91,11 @@ export function AccountHeader({ photoRequired = false }) {
   };
 
   // The plain count for the role on screen (a courier counts deliveries, a shipper deliveries sent), and for people who are PAID the miles they drove.
-  const count = APP_ROLE === "courier" ? [rep.carried, "delivery", "deliveries"] : APP_ROLE === "shipper" ? [rep.sent, "delivery sent", "deliveries sent"] : IS_DRIVER_APP ? [rep.drives, "trip", "trips"] : [rep.rides, "trip", "trips"];
-  const tripsLine = `${count[0]} ${count[0] === 1 ? count[1] : count[2]}${IS_DRIVER_APP ? ` · ${fmtMiles(rep.miles)} driven` : ""}`;
+  // In GoGet a person who acted in both paid roles sees both counts (taxi trips and deliveries carried).
+  const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+  const count = APP_ROLE === "courier" ? plural(rep.carried, "delivery", "deliveries") : APP_ROLE === "shipper" ? plural(rep.sent, "delivery sent", "deliveries sent") : IS_DRIVER_APP ? plural(rep.drives, "trip", "trips") : plural(rep.rides, "trip", "trips");
+  const other = IS_GOGET && APP_ROLE === "driver" && rep.carried > 0 ? plural(rep.carried, "delivery", "deliveries") + " as a courier" : IS_GOGET && APP_ROLE === "courier" && rep.drives > 0 ? plural(rep.drives, "taxi trip", "taxi trips") : "";
+  const tripsLine = [count, other, IS_DRIVER_APP ? `${fmtMiles(rep.miles)} driven` : ""].filter(Boolean).join(" · ");
 
   return (
     <div className="flex items-center gap-4 py-2">
