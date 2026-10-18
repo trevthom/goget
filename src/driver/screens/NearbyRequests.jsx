@@ -7,6 +7,7 @@
 //  Tapping a row opens that request (Accept / Decline) on the map page; the driver comes back to this list afterwards.
 // ════════════════════════════════════════════════════════════
 
+import { formatDistance } from "../../lib/units.js";
 import { useApp } from "../../state/AppContext.jsx";
 import { useDriver, shownSats } from "../state/DriverContext.jsx";
 import { driveMinutes, pickupEta, roadMiles } from "../../lib/fare.js";
@@ -63,7 +64,7 @@ export default function NearbyRequests({ onBack, onPick }) {
                     </div>
                     <dl className="mt-3 grid grid-cols-3 gap-2 text-center">
                       <div className="rounded-xl bg-neutral-100 px-2 py-2"><dd className="font-semibold text-[15px]">{f.awayMin != null ? `${f.awayMin} min` : "—"}</dd><dt className="text-[11px] text-neutral-500">to the rider</dt></div>
-                      <div className="rounded-xl bg-neutral-100 px-2 py-2"><dd className="font-semibold text-[15px]">{f.tripMiles.toFixed(1)} mi</dd><dt className="text-[11px] text-neutral-500">trip distance</dt></div>
+                      <div className="rounded-xl bg-neutral-100 px-2 py-2"><dd className="font-semibold text-[15px]">{formatDistance(f.tripMiles)}</dd><dt className="text-[11px] text-neutral-500">trip distance</dt></div>
                       <div className="rounded-xl bg-neutral-100 px-2 py-2"><dd className="font-semibold text-[15px]">{f.tripMin} min</dd><dt className="text-[11px] text-neutral-500">trip drive time</dt></div>
                     </dl>
                     {f.when && <p className="text-sm font-semibold mt-2">Reserved for {f.when}</p>}

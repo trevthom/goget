@@ -4,6 +4,7 @@
 //  request and the bid form. A request the courier already bid on says so.
 // ════════════════════════════════════════════════════════════
 
+import { formatDistance } from "../../lib/units.js";
 import { useState } from "react";
 import { useApp } from "../../state/AppContext.jsx";
 import { useCourier, RADIUS_CHOICES } from "../state/CourierContext.jsx";
@@ -36,7 +37,7 @@ export default function JobsScreen() {
         <div className="flex gap-1.5" role="group" aria-label="Distance">
           {RADIUS_CHOICES.map((r) => (
             <button key={r} type="button" aria-pressed={radius === r} onClick={() => setRadius(r)}
-              className={`px-3 py-1.5 rounded-full text-sm font-semibold ${radius === r ? "bg-black text-white" : "bg-neutral-100 text-neutral-700"}`}>{r} mi</button>
+              className={`px-3 py-1.5 rounded-full text-sm font-semibold ${radius === r ? "bg-black text-white" : "bg-neutral-100 text-neutral-700"}`}>{formatDistance(r, { digits: 0 })}</button>
           ))}
         </div>
       </div>
@@ -60,7 +61,7 @@ export default function JobsScreen() {
                   </div>
                   <p className="text-sm text-neutral-700 mt-1 truncate">{c.pickup?.name} → {c.dropoff?.name}</p>
                   <p className="text-xs text-neutral-500 mt-0.5">
-                    {miles != null ? `${miles.toFixed(1)} mi away · ` : ""}{c.distanceMiles ? `${c.distanceMiles} mi trip · ` : ""}{c.time && c.time !== "ASAP" ? "pickup " + new Date(c.time).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "as soon as possible"}
+                    {miles != null ? `${formatDistance(miles)} away · ` : ""}{c.distanceMiles ? `${formatDistance(c.distanceMiles)} trip · ` : ""}{c.time && c.time !== "ASAP" ? "pickup " + new Date(c.time).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "as soon as possible"}
                   </p>
                   {need && <p className="text-xs font-semibold mt-1 inline-flex items-center gap-1"><Icon name="truck" size={12} /> {need}</p>}
                   {c.what?.note && <p className="text-sm text-neutral-600 mt-1 line-clamp-2">{c.what.note}</p>}

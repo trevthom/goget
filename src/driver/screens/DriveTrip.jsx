@@ -13,6 +13,7 @@
 //  rider pays what the ride earned. A rider's extra stop is accepted here, or the ride is finished.
 // ════════════════════════════════════════════════════════════
 
+import { formatDistance } from "../../lib/units.js";
 import { useEffect, useRef, useState } from "react";
 import { ARRIVE_RADIUS_METERS } from "../../config/settings.js";
 import { useApp } from "../../state/AppContext.jsx";
@@ -227,7 +228,7 @@ export default function DriveTrip({ request }) {
             {proposed ? (
               <p className="text-[15px] mt-1">
                 <span className="font-semibold">{proposed.name}</span>
-                {shiftMiles != null && <span className="text-neutral-600"> · {shiftMiles < 0.1 ? "under 0.1" : shiftMiles.toFixed(1)} mi from the first pickup</span>}
+                {shiftMiles != null && <span className="text-neutral-600"> · {shiftMiles < 0.1 ? `under ${formatDistance(0.1)}` : formatDistance(shiftMiles)} from the first pickup</span>}
               </p>
             ) : (
               <p className="text-sm text-neutral-600 mt-1">The new place can't be read yet.</p>

@@ -6,6 +6,7 @@
 //    <BidForm request={…} existing={bid|undefined} onClose />
 // ════════════════════════════════════════════════════════════
 
+import { formatDistance } from "../../lib/units.js";
 import { useState } from "react";
 import { useApp } from "../../state/AppContext.jsx";
 import { useCourier } from "../state/CourierContext.jsx";
@@ -48,7 +49,7 @@ export default function BidForm({ request, existing, onClose }) {
     <Modal open title={existing ? "Your bid" : "Bid on this delivery"} onClose={onClose}>
       <p className="font-semibold">{typeLabel(c.what?.type)} · {sizeLabel(c.what?.size)}</p>
       <p className="text-sm text-neutral-600 mt-0.5">{c.pickup?.name} → {c.dropoff?.name}</p>
-      <p className="text-sm text-neutral-500">{c.distanceMiles ? `${c.distanceMiles} mi` : ""}{c.durationMin ? ` · about ${c.durationMin} min` : ""} · {c.time && c.time !== "ASAP" ? "pickup " + new Date(c.time).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "as soon as possible"}</p>
+      <p className="text-sm text-neutral-500">{c.distanceMiles ? formatDistance(c.distanceMiles) : ""}{c.durationMin ? ` · about ${c.durationMin} min` : ""} · {c.time && c.time !== "ASAP" ? "pickup " + new Date(c.time).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "as soon as possible"}</p>
       {need && <p className="text-sm font-semibold mt-1">{need}</p>}
       {c.what?.note && <p className="text-sm mt-2 bg-neutral-100 rounded-xl px-3 py-2 whitespace-pre-wrap">{c.what.note}</p>}
       <p className="text-xs text-neutral-500 mt-2">From {shipper?.name || shortNpub(request.pubkey)}</p>

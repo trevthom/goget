@@ -12,6 +12,7 @@
 //  no deposit: the rider pays in ecash as the ride runs.
 // ════════════════════════════════════════════════════════════
 
+import { formatDistance, ratePerUnit, unitName } from "../../lib/units.js";
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "../../state/AppContext.jsx";
 import { useDriver, fareOf, typicalSatsFor, shownSats } from "../state/DriverContext.jsx";
@@ -198,7 +199,7 @@ function Incoming({ item, auto, onClose }) {
           <Money sats={fare} stacked className="text-4xl font-extrabold tracking-tight" subClassName="text-neutral-500 text-sm" />
         </div>
         <div className="text-right text-sm text-neutral-600">
-          <p>{tripMin} min · {tripMiles.toFixed(1)} mi trip</p>
+          <p>{tripMin} min · {formatDistance(tripMiles)} trip</p>
           {c.time && c.time !== "ASAP" && <p className="font-semibold text-black">{whenText(c.time)}</p>}
         </div>
       </div>
@@ -210,7 +211,7 @@ function Incoming({ item, auto, onClose }) {
         <div className="min-w-0 flex-1 space-y-3">
           <div>
             <p className="text-[15px] font-medium truncate">{c.pickup.name}</p>
-            <p className="text-xs text-neutral-500">{awayMin != null ? `${awayMin} min · ${miles.toFixed(1)} mi away` : "Pickup area"} · approximate</p>
+            <p className="text-xs text-neutral-500">{awayMin != null ? `${awayMin} min · ${formatDistance(miles)} away` : "Pickup area"} · approximate</p>
           </div>
           <p className="text-[15px] font-medium truncate">{c.dropoff.name}</p>
         </div>
@@ -220,7 +221,7 @@ function Incoming({ item, auto, onClose }) {
       {c.notes && <p className="mt-2 text-sm text-neutral-600 bg-neutral-100 rounded-xl px-3 py-2">“{c.notes}”</p>}
 
       <p className="text-xs mt-3 text-neutral-500">
-        The rider pays your rates as the ride runs: {formatFiat(rates.base, rates.currency)} base, {formatFiat(rates.perMile, rates.currency)}/mi, {formatFiat(rates.perMinute, rates.currency)}/min.
+        The rider pays your rates as the ride runs: {formatFiat(rates.base, rates.currency)} base, {formatFiat(ratePerUnit(rates.perMile), rates.currency)}/{unitName()}, {formatFiat(rates.perMinute, rates.currency)}/min.
       </p>
 
       <p className="text-xs text-neutral-500 mt-3">

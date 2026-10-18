@@ -18,6 +18,7 @@ import AppearanceSection from "../../features/profile/AppearanceSection.jsx";
 import KeysSection from "../../features/profile/KeysSection.jsx";
 import ContextSwitch from "../../features/goget/ContextSwitch.jsx";
 import Fold from "../../ui/Fold.jsx";
+import UnitsSection from "../../features/profile/UnitsSection.jsx";
 import { RecoveryFold, RecoveryNotice } from "../../features/ecash/RecoverySection.jsx";
 import { cdlText } from "../../lib/cdl.js";
 
@@ -39,6 +40,7 @@ export default function AccountScreen() {
           </Fold>
           <Fold id="appearance" title="Appearance"><AppearanceSection /></Fold>
           <Fold id="currency" title="Currency"><CurrencySection /></Fold>
+          <Fold id="units" title="Units"><UnitsSection /></Fold>
           <Fold id="ecash" title="Ecash wallet"><EcashSection locked={busy} /></Fold>
           <RecoveryFold />
           <Fold id="wallet" title="Lightning wallet"><WalletSection /></Fold>
