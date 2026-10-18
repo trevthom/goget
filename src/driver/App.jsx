@@ -43,9 +43,9 @@ function Shell() {
 
 // The signed-in part of the app: this role's state and its screens. GoGet mounts this for the Passenger / Taxi Driver context.
 export function DriverSession() {
-  const { user } = useApp();
+  const { user, settingsEpoch } = useApp();
   return (
-    <DriverProvider key={user.publicKey}>
+    <DriverProvider key={user.publicKey + ":" + settingsEpoch}>
       <Shell />
     </DriverProvider>
   );

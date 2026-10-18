@@ -46,9 +46,9 @@ function Shell() {
 }
 
 export function ShipperSession() {
-  const { user } = useApp();
+  const { user, settingsEpoch } = useApp();
   return (
-    <ShipperProvider key={user.publicKey}>
+    <ShipperProvider key={user.publicKey + ":" + settingsEpoch}>
       <Shell />
     </ShipperProvider>
   );

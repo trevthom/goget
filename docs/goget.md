@@ -57,6 +57,14 @@ Every setting is a section you tap open. The sections are the same in all contex
 | **Nostr relays** | The relays GoGet talks to. You can add your own. |
 | **Your keys** | Show or copy your keys. Keep the secret key secret. |
 
+### Your backup (automatic)
+GoGet keeps a backup of your **blocked people, your settings and your vouch list** on the relays. It is **encrypted with your own secret key (nsec)**: relays store a block of noise and cannot read it. Log in on a new phone with the same nsec and GoGet restores them (a short notice tells you). There is nothing to switch on, and no extra password.
+- **What is in it:** blocked people, the role you chose, dark mode, currency, your distance and alert settings, safety contacts, your chosen mint and relays, automatic cash out, the one-time notices you read, and your vouch list.
+- **What is not:** your secret key, and your ecash. The ecash has its own *Recovery phrase*.
+- **Two phones:** each setting follows the newest change, one setting at a time. A phone that cannot reach the relays never overwrites your backup.
+- **Safety contacts** (names and phone numbers) are in it too, encrypted. If you do not want that, do not add safety contacts.
+- Anyone who has your nsec can read your backup. Keep the nsec secret.
+
 ---
 
 ## 4. Passenger and Taxi Driver

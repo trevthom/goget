@@ -25,6 +25,7 @@ import { forgetKey } from "../nostr/keystore.js";
 import { APP_NAME } from "../config/app.js";
 import { getSetting, setSetting, reconnectAll } from "../config/relays.js";
 import { addBlock, removeBlock, isBlocked } from "../lib/blocks.js";
+import { useBackup } from "./useBackup.js";
 import { showSystemNotification } from "../lib/notify.js";
 import { PRICE_CODES, PRICE_MAX_AGE_MS, getCurrency, setCurrency as saveCurrency, onCurrencyChange } from "../lib/currency.js";
 import { FALLBACK_BTC_USD } from "../config/settings.js";
@@ -78,6 +79,7 @@ export function AppProvider({ initialView, children }) {
   const [notices, setNotices] = useState([]); // transient swipe-away banners
   const [liveTick, setLiveTick] = useState(0); // bumped on incoming relay events to re-render
   const [wallet, setWallet] = useState(emptyWalletState()); // connected NWC wallet
+  const [settingsEpoch, setSettingsEpoch] = useState(0); // bumped once when a backup restored settings at login: the role screens remount and read them
 
   // Show a transient banner. Also fires a system notification when the app
   // isn't the focused tab, so users hear about it off-screen.
@@ -259,6 +261,9 @@ export function AppProvider({ initialView, children }) {
     [user]
   );
 
+  // The encrypted backup of blocks, settings and vouches, tied to the nsec (lib/backup.js): restore at login, upload on change.
+  useBackup({ user, publish, refreshVouches, setBlocked, pushNotice, bumpEpoch: () => setSettingsEpoch((e) => e + 1) });
+
   // New relay events refresh the UI. A relay fetch can deliver hundreds of
   // events at once, so refreshes are coalesced: at most one refreshData +
   // one re-render per 100 ms.
@@ -387,6 +392,7 @@ export function AppProvider({ initialView, children }) {
     wallet,
     setWallet,
     refreshVouches,
+    settingsEpoch,
     ecash,
     ecashOff,
     disconnectEcash,

@@ -43,6 +43,7 @@ export const EVENT_KINDS = {
   DELIVERY_PAY: 30109, // Shipper -> courier: one ecash payment (token sealed to the courier): the part at pickup, the rest at delivery
   DELIVERY_PAY_REPLY: 30110, // Courier -> shipper: that payment was received (or refused)
   CDL_VOUCH: 30111, // "I have seen this person's CDL and these endorsements": a vouch for a courier's self-declared CDL (public, one per voucher and courier)
+  SETTINGS_BACKUP: 30112, // The person's own backup: blocks, settings, vouches, encrypted to their OWN key (nsec) so any device with the nsec can restore it
   RIDE_STOP_REPLY: 30100, // The assigned driver accepts the extra stop (or finishes the ride instead)
   RATING: 30082, // UNUSED: star ratings and reviews were removed (too easy to fake); see VOUCH_LIST
   DRIVER_ROUTE: 30083, // (removed feature; kept for back-compat)

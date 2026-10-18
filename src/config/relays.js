@@ -39,13 +39,14 @@ export function getRelays() {
   return current;
 }
 
-export function setRelays(list) {
+export function setRelays(list, at = Date.now()) {
   current = list.slice();
   try {
     localStorage.setItem(RELAY_KEY, JSON.stringify(current));
   } catch {
     /* ignore */
   }
+  touchSetting("relays", at);
   listeners.forEach((fn) => { try { fn(current); } catch { /* ignore */ } });
 }
 
@@ -66,6 +67,22 @@ export function useRelays() {
   return list;
 }
 
+// ── When was each setting last changed on this device? ──
+// The settings backup (lib/backup.js) merges two devices key by key: the newer change wins. So every write is stamped
+// (one small map, `nostrride__changed`); a value that was never stamped counts as "changed at 0".
+const CHANGED_KEY = "nostrride__changed";
+function readChanged() {
+  try { const m = JSON.parse(localStorage.getItem(CHANGED_KEY) || "{}"); return m && typeof m === "object" ? m : {}; } catch { return {}; }
+}
+export const settingChangedAt = (key) => Number(readChanged()[key]) || 0;
+export function touchSetting(key, at = Date.now()) {
+  try {
+    const m = readChanged();
+    m[key] = at;
+    localStorage.setItem(CHANGED_KEY, JSON.stringify(m));
+  } catch { /* ignore */ }
+}
+
 // ── Tiny generic settings persistence (e.g. driver notify prefs) ──
 export function getSetting(key, fallback) {
   try {
@@ -77,10 +94,11 @@ export function getSetting(key, fallback) {
   return fallback;
 }
 
-export function setSetting(key, value) {
+export function setSetting(key, value, at = Date.now()) {
   try {
     localStorage.setItem("nostrride_" + key, JSON.stringify(value));
   } catch {
     /* ignore */
   }
+  touchSetting(key, at);
 }

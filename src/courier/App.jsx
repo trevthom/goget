@@ -42,9 +42,9 @@ function Shell() {
 }
 
 export function CourierSession() {
-  const { user } = useApp();
+  const { user, settingsEpoch } = useApp();
   return (
-    <CourierProvider key={user.publicKey}>
+    <CourierProvider key={user.publicKey + ":" + settingsEpoch}>
       <Shell />
     </CourierProvider>
   );

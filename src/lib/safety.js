@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════════
-//  SAFETY — Trusted contacts (kept on this device only) and the text /
+//  SAFETY — Trusted contacts (kept on this device, and in the encrypted account backup, lib/backup.js) and the text /
 //  links the safety sheet sends. Pure helpers, so they can be tested.
 // ════════════════════════════════════════════════════════════
 
