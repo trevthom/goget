@@ -16,7 +16,7 @@ import { tripCounts } from "../../lib/rides.js";
 import { resizeImage } from "../../lib/image.js";
 import { useRelays, setRelays } from "../../config/relays.js";
 import { CONTACT_PLATFORMS, } from "../../config/settings.js";
-import { APP_NAME, BUILD_ID, IS_DRIVER_APP } from "../../config/app.js";
+import { APP_NAME, BUILD_ID, IS_DRIVER_APP, IS_GOGET, peerName } from "../../config/app.js";
 import Avatar from "../../ui/Avatar.jsx";
 import Icon from "../../ui/Icon.jsx";
 import Button from "../../ui/Button.jsx";
@@ -49,6 +49,7 @@ export function useSaveProfile() {
             ...(next.lud16 !== undefined && { lud16: next.lud16 }),
             ...(next.gender !== undefined && { gender: next.gender }),
             ...(next.rates !== undefined && { rates: next.rates }), // null = back to the app's rates
+            ...(next.courier !== undefined && { courier: next.courier }), // GoGet: { cdl, vehicle } or null
             // Plate is sealed to ourselves; riders get it privately in offers.
             vehicle: sealVehicle(next.vehicle, next.sk, next.publicKey),
           },
@@ -85,7 +86,7 @@ export function AccountHeader({ photoRequired = false }) {
     }
   };
   const commit = () => {
-    save({ name: draft.trim() || (IS_DRIVER_APP ? "Anonymous Driver" : "Anonymous Rider") });
+    save({ name: draft.trim() || (IS_GOGET ? "Anonymous" : IS_DRIVER_APP ? "Anonymous Driver" : "Anonymous Rider") });
     setEditing(false);
   };
 
@@ -161,7 +162,7 @@ export function ContactMethods() {
     <div>
       <SectionLabel>Contact methods</SectionLabel>
       <p className="text-neutral-500 text-sm mb-3">
-        Your {IS_DRIVER_APP ? "rider" : "driver"} can use these to reach you during a trip.
+        Your {peerName()} can use these to reach you during a trip.
       </p>
       {comm.map((c, i) => (
         <div key={i} className="flex items-center justify-between py-2 border-b border-neutral-100">

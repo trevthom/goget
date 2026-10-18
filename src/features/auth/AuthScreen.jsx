@@ -19,7 +19,7 @@ import { getMetadata, getProfile } from "../../nostr/profiles.js";
 import { getSavedKey, saveKey, unlockKey, MIN_PASSWORD } from "../../nostr/keystore.js";
 import { myVehicle } from "../../lib/privacy.js";
 import { useRelays, setRelays } from "../../config/relays.js";
-import { IS_DRIVER_APP, APP_NAME } from "../../config/app.js";
+import { IS_DRIVER_APP, IS_GOGET, APP_NAME, SLOGAN } from "../../config/app.js";
 import Button from "../../ui/Button.jsx";
 import Icon from "../../ui/Icon.jsx";
 import RelayEditor from "../../ui/RelayEditor.jsx";
@@ -28,8 +28,10 @@ import { Field, inputCls } from "../../ui/Parts.jsx";
 import PasswordField from "../../ui/PasswordField.jsx";
 import { UnlockView, BackupStep } from "./AuthSteps.jsx";
 
-const DEFAULT_NAME = IS_DRIVER_APP ? "Anonymous Driver" : "Anonymous Rider";
-const COPY = IS_DRIVER_APP
+const DEFAULT_NAME = IS_GOGET ? "Anonymous" : IS_DRIVER_APP ? "Anonymous Driver" : "Anonymous Rider";
+const COPY = IS_GOGET
+  ? { tagline: SLOGAN, sub: "Rides and deliveries, arranged peer to peer on Nostr and paid in ecash." }
+  : IS_DRIVER_APP
   ? { tagline: "Drive. Get paid in sats.", sub: "Set your own hours. Riders pay you directly over Lightning." }
   : { tagline: "Get there. No middleman.", sub: "Rides arranged peer to peer on Nostr, paid over Lightning." };
 
@@ -89,7 +91,7 @@ export default function AuthScreen({ onLogin }) {
       relay.publish(buildSignedEvent(EVENT_KINDS.METADATA, { ...existing, name: typed }, [], keys.sk));
     }
     enter(
-      { ...keys, name: typed || p.name || DEFAULT_NAME, comm: p.comm, picture: p.picture, lud16: p.lud16, gender: p.gender, rates: p.rates, vehicle: myVehicle(keys.publicKey, keys.sk) },
+      { ...keys, name: typed || p.name || DEFAULT_NAME, comm: p.comm, picture: p.picture, lud16: p.lud16, gender: p.gender, rates: p.rates, courier: p.courier, vehicle: myVehicle(keys.publicKey, keys.sk) },
       { save }
     );
   };

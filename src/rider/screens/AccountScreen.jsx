@@ -17,6 +17,8 @@ import SafetySection from "../components/SafetySection.jsx";
 import KeysSection from "../../features/profile/KeysSection.jsx";
 import Fold from "../../ui/Fold.jsx";
 import { RecoveryFold, RecoveryNotice } from "../../features/ecash/RecoverySection.jsx";
+import ContextSwitch from "../../features/goget/ContextSwitch.jsx";
+import { IS_GOGET } from "../../config/app.js";
 
 export default function AccountScreen() {
   const { user } = useApp();
@@ -27,6 +29,7 @@ export default function AccountScreen() {
         <AccountHeader />
         <RecoveryNotice />
         <div>
+          {IS_GOGET && <Fold id="context" title="Switch role" defaultOpen><ContextSwitch locked={activeRide ? "a ride is running" : ""} /></Fold>}
           <Fold id="appearance" title="Appearance"><AppearanceSection /></Fold>
           <Fold id="currency" title="Currency"><CurrencySection /></Fold>
           <Fold id="ecash" title="Ecash wallet"><EcashSection locked={!!activeRide} /></Fold>

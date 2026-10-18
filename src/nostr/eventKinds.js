@@ -33,6 +33,15 @@ export const EVENT_KINDS = {
   RIDE_STOP_CHANGE: 30099, // Rider asks to add a stop or change the destination mid-ride (place sealed)
   VOUCH_LIST: 30102, // "Your vouches": the people this person knows and trusts (public, replaceable, one p tag each)
   RIDE_OFFER_DECLINE: 30101, // The rider turns down ONE driver's offer; the request stays open for everyone else
+  // GoGet deliveries (src/lib/delivery.js). A delivery is a ride with a parcel and a price: the courier BIDS, the shipper picks one.
+  DELIVERY_REQUEST: 30103, // Shipper: a parcel to carry (coarse places public, exact places sealed). Versions share the d-tag: requested -> assigned -> closed
+  DELIVERY_BID: 30104, // Courier: a price, an arrival time, notes and CDL details for one request
+  DELIVERY_ACCEPT: 30105, // Shipper: takes ONE bid (exact places sealed to that courier); every other bid is thereby declined
+  DELIVERY_BID_DECLINE: 30106, // Shipper: turns down ONE bid; the request stays open
+  DELIVERY_STAGE: 30107, // Courier: delivered (optionally with a photo sealed to the shipper), or withdrawn before pickup
+  DELIVERY_CONFIRM: 30108, // Shipper: pickup (typed the courier's 4-digit code) / delivered (parcel received) / problem
+  DELIVERY_PAY: 30109, // Shipper -> courier: one ecash payment (token sealed to the courier): the part at pickup, the rest at delivery
+  DELIVERY_PAY_REPLY: 30110, // Courier -> shipper: that payment was received (or refused)
   RIDE_STOP_REPLY: 30100, // The assigned driver accepts the extra stop (or finishes the ride instead)
   RATING: 30082, // UNUSED: star ratings and reviews were removed (too easy to fake); see VOUCH_LIST
   DRIVER_ROUTE: 30083, // (removed feature; kept for back-compat)

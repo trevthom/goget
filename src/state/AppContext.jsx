@@ -53,6 +53,14 @@ const APP_EVENT_KINDS = new Set([
   EVENT_KINDS.RIDE_STOP_CHANGE,
   EVENT_KINDS.RIDE_STOP_REPLY,
   EVENT_KINDS.VOUCH_LIST,
+  EVENT_KINDS.DELIVERY_REQUEST,
+  EVENT_KINDS.DELIVERY_BID,
+  EVENT_KINDS.DELIVERY_ACCEPT,
+  EVENT_KINDS.DELIVERY_BID_DECLINE,
+  EVENT_KINDS.DELIVERY_STAGE,
+  EVENT_KINDS.DELIVERY_CONFIRM,
+  EVENT_KINDS.DELIVERY_PAY,
+  EVENT_KINDS.DELIVERY_PAY_REPLY,
 ]);
 
 // The hook every screen uses to reach shared state.
@@ -64,6 +72,7 @@ export function AppProvider({ initialView, children }) {
   const [user, setUser] = useState(null); // logged-in keypair + profile
   const [view, setView] = useState(initialView); // which tab is visible
   const [rideRequests, setRideRequests] = useState([]); // latest version of each
+  const [deliveryRequests, setDeliveryRequests] = useState([]); // GoGet: latest version of each delivery request
   const [profileModalPubkey, setProfileModalPubkey] = useState(null); // user-info modal
   const [notices, setNotices] = useState([]); // transient swipe-away banners
   const [liveTick, setLiveTick] = useState(0); // bumped on incoming relay events to re-render
@@ -205,6 +214,9 @@ export function AppProvider({ initialView, children }) {
       }
     });
     setRideRequests(reqs);
+    setDeliveryRequests(latestVersions(relay.query({ kinds: [EVENT_KINDS.DELIVERY_REQUEST] })).filter((r) => {
+      try { const c = JSON.parse(r.content); return c && c.pickup && c.dropoff; } catch { return false; }
+    }));
   }, []);
 
   useEffect(() => {
@@ -254,7 +266,7 @@ export function AppProvider({ initialView, children }) {
     let requestsChanged = false;
     const unsub = relay.onEvent((_subId, event) => {
       if (!APP_EVENT_KINDS.has(event.kind)) return;
-      requestsChanged = requestsChanged || event.kind === EVENT_KINDS.RIDE_REQUEST;
+      requestsChanged = requestsChanged || event.kind === EVENT_KINDS.RIDE_REQUEST || event.kind === EVENT_KINDS.DELIVERY_REQUEST;
       if (timer) return;
       timer = setTimeout(() => {
         timer = null;
@@ -334,7 +346,7 @@ export function AppProvider({ initialView, children }) {
     (async () => {
       await relay.fetchProfile(user.publicKey);
       const p = getProfile(user.publicKey);
-      if (alive && p && (p.picture || p.vehicle || p.lud16 || p.gender || p.rates)) {
+      if (alive && p && (p.picture || p.vehicle || p.lud16 || p.gender || p.rates || p.courier)) {
         setUser((u) => u && ({
           ...u,
           picture: u.picture || p.picture || "",
@@ -342,6 +354,7 @@ export function AppProvider({ initialView, children }) {
           vehicle: u.vehicle || myVehicle(u.publicKey, u.sk),
           gender: u.gender ?? p.gender ?? "",
           rates: u.rates ?? p.rates ?? null,
+          courier: u.courier ?? p.courier ?? null,
         }));
       }
     })();
@@ -366,6 +379,7 @@ export function AppProvider({ initialView, children }) {
     view,
     setView,
     rideRequests,
+    deliveryRequests,
     refreshData,
     pullRecent,
     publish,

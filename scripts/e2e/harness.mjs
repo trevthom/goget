@@ -38,14 +38,17 @@ async function waitHttp(url, tries = 60) {
   throw new Error("server did not start: " + url);
 }
 
-export async function boot({ feePpk = 0, driverRates = null } = {}) {
+// apps: which of the builds to serve: "rider" (4173), "driver" (4174), "goget" (4175). The default is the two standalone apps.
+export async function boot({ feePpk = 0, driverRates = null, apps = ["rider", "driver"] } = {}) {
   const relay = await startRelay();
   const mint = await startLocalMint({ feePpk });
   const rider = Keys.generateKeypair(), driver = Keys.generateKeypair();
-  if (!process.env.E2E_NOBUILD) await new Promise((res, rej) => spawn(process.execPath, [`${REPO}/node_modules/vite/bin/vite.js`, "build", "--mode", "rider"], { cwd: REPO, stdio: "ignore" }).on("exit", (c) => (c ? rej(new Error("rider build failed")) : res())));
-  if (!process.env.E2E_NOBUILD) await new Promise((res, rej) => spawn(process.execPath, [`${REPO}/node_modules/vite/bin/vite.js`, "build", "--mode", "driver"], { cwd: REPO, stdio: "ignore" }).on("exit", (c) => (c ? rej(new Error("driver build failed")) : res())));
-  const vr = startVite("rider", 4173), vd = startVite("driver", 4174);
-  await Promise.all([waitHttp("http://localhost:4173/"), waitHttp("http://localhost:4174/")]);
+  const PORTS = { rider: 4173, driver: 4174, goget: 4175 };
+  if (!process.env.E2E_NOBUILD) {
+    for (const app of apps) await new Promise((res, rej) => spawn(process.execPath, [`${REPO}/node_modules/vite/bin/vite.js`, "build", "--mode", app], { cwd: REPO, stdio: "ignore" }).on("exit", (c) => (c ? rej(new Error(app + " build failed")) : res())));
+  }
+  const servers = apps.map((app) => startVite(app, PORTS[app]));
+  await Promise.all(apps.map((app) => waitHttp(`http://localhost:${PORTS[app]}/`)));
   const browser = await chromium.launch({ args: ["--no-sandbox"] });
   const errors = [];
 
@@ -107,7 +110,7 @@ export async function boot({ feePpk = 0, driverRates = null } = {}) {
 
   const stop = async () => {
     await browser.close().catch(() => {});
-    vr.kill(); vd.kill();
+    servers.forEach((p) => p.kill());
     await mint.close(); await relay.close();
   };
   // Class names seen on `page` that the built CSS of `role` has no rule for (marker classes such as "group" have none and are expected).
@@ -118,5 +121,5 @@ export async function boot({ feePpk = 0, driverRates = null } = {}) {
     const tokens = await page.evaluate(() => [...(window.__seenClasses || [])]);
     return tokens.filter((t) => !css.includes("." + esc(t)) && !/^(group|peer|nr-up)$/.test(t)).sort();
   };
-  return { relay, mint, rider, driver, seedDriver, missingStyles, newKeys: () => Keys.generateKeypair(), browser, errors, newContext, login, stop, riderUrl: "http://localhost:4173/", driverUrl: "http://localhost:4174/" };
+  return { relay, mint, rider, driver, seedDriver, missingStyles, newKeys: () => Keys.generateKeypair(), browser, errors, newContext, login, stop, riderUrl: "http://localhost:4173/", driverUrl: "http://localhost:4174/", gogetUrl: "http://localhost:4175/" };
 }

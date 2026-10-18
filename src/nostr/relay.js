@@ -46,6 +46,14 @@ const APP_KINDS = [
   EVENT_KINDS.RIDE_STOP_REPLY,
   EVENT_KINDS.RIDE_OFFER_DECLINE,
   EVENT_KINDS.VOUCH_LIST,
+  EVENT_KINDS.DELIVERY_REQUEST,
+  EVENT_KINDS.DELIVERY_BID,
+  EVENT_KINDS.DELIVERY_ACCEPT,
+  EVENT_KINDS.DELIVERY_BID_DECLINE,
+  EVENT_KINDS.DELIVERY_STAGE,
+  EVENT_KINDS.DELIVERY_CONFIRM,
+  EVENT_KINDS.DELIVERY_PAY,
+  EVENT_KINDS.DELIVERY_PAY_REPLY,
 ];
 
 const nowSec = () => Math.floor(Date.now() / 1000);
@@ -171,18 +179,19 @@ class NostrRelay {
       const missing = tagVals(first, "e").filter((id) => !this.seen.has(id));
       for (const ids of chunks(missing)) take(await q({ ids }));
       const refs = new Set([...tagVals(first, "e"), ...first.map((e) => e.id)]);
-      const rides = this.query({ kinds: [EVENT_KINDS.RIDE_REQUEST] }).filter((e) => refs.has(e.id));
+      const requestKinds = [EVENT_KINDS.RIDE_REQUEST, EVENT_KINDS.DELIVERY_REQUEST]; // a ride and a delivery are followed the same way
+      const rides = this.query({ kinds: requestKinds }).filter((e) => refs.has(e.id));
       const authors = [...new Set(rides.map((e) => e.pubkey))];
       for (const ds of chunks(tagVals(rides, "d"))) {
-        if (authors.length) take(await q({ kinds: [EVENT_KINDS.RIDE_REQUEST], authors, "#d": ds }));
+        if (authors.length) take(await q({ kinds: requestKinds, authors, "#d": ds }));
       }
       // 3) How each ride ended, and what was paid.
       const dset = new Set(tagVals(rides, "d"));
-      const versionIds = this.query({ kinds: [EVENT_KINDS.RIDE_REQUEST], authors })
+      const versionIds = this.query({ kinds: requestKinds, authors })
         .filter((e) => dset.has((e.tags.find((t) => t[0] === "d") || [])[1]))
         .map((e) => e.id);
       for (const ids of chunks(versionIds)) {
-        take(await q({ kinds: APP_KINDS.filter((k) => k !== EVENT_KINDS.RIDE_REQUEST && k !== EVENT_KINDS.RIDE_OFFER && k !== EVENT_KINDS.RIDE_ACCEPT), "#e": ids }));
+        take(await q({ kinds: APP_KINDS.filter((k) => k !== EVENT_KINDS.RIDE_REQUEST && k !== EVENT_KINDS.RIDE_OFFER && k !== EVENT_KINDS.RIDE_ACCEPT && k !== EVENT_KINDS.DELIVERY_REQUEST && k !== EVENT_KINDS.DELIVERY_BID && k !== EVENT_KINDS.DELIVERY_ACCEPT), "#e": ids }));
       }
     } catch (e) {
       console.error("History fetch failed:", e);

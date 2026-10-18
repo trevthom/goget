@@ -4,6 +4,10 @@ Guidance for AI coding agents working in this repo. Read this first; it
 should let you make correct edits without reading every file.
 
 ## What this is
+**This branch (`GoGet`) adds a THIRD app: GoGet — "You go. We get."** One app, four contexts picked after login (and changed in Account → Switch role):
+**Taxi Driver** (= the driver app below, unchanged), **Passenger** (= the rider app, unchanged), **Courier** and **Shipping** (new: parcel deliveries where couriers BID and the shipper picks one).
+Read **`docs/goget.md`** (the user guide) and the "GoGet" section near the end of this file. The rider and driver apps still build on their own (`--mode rider|driver`); GoGet is `--mode goget` (`apps/goget`, `src/goget`).
+
 NostrRide — a decentralized ridesharing system made of **two separate web apps**
 that talk to each other only over **Nostr** (no server, no DB):
 
@@ -23,8 +27,8 @@ Look: white UI, black buttons, bottom sheets over a full-screen map (Inter font)
 - `npm install` then `npm run dev` → starts BOTH apps: rider http://localhost:5173,
   driver http://localhost:5174 (`scripts/dev.mjs`). Use two browser windows to play both sides.
   `npm run dev:rider` / `npm run dev:driver` start one.
-- `npm run build` → builds both to `dist/rider` and `dist/driver` (each deploys on its own).
-  `build:rider` / `build:driver` build one. `preview:rider` / `preview:driver` serve a build.
+- `npm run build` → builds all three to `dist/rider`, `dist/driver` and `dist/goget` (each deploys on its own).
+  `build:rider` / `build:driver` / `build:goget` build one. `npm run dev:goget` → GoGet on http://localhost:5175 (`npm run dev` starts all three). `preview:rider` / `preview:driver` serve a build.
 - `npm test` → Node's built-in test runner over `test/*.test.mjs` (no extra deps):
   trust rules, ride stages, finishing a ride, fares, trips, earnings, privacy, history, LNURL, geocode, publish,
   event ordering, contact links, GPS quality, payment evidence, blocking, trip sharing, vouches (`vouches`), the recovery phrase and restore (`recovery`, `restore`), native location, outbox, relay health (`relayhealth`), request expiry / blocking both ways / declined offers (`requests`), old flat offers read as standard / driver rates + currencies / exact amounts / tips / pickup change / odometer + 5% rule + GPS gap / stage times / relay filter shape / gender order / driver requirements / **dark mode (`appearance`), the trip card: low balance / fare-change estimate / trip clock seconds (`tripcard`), ticks, missed payments, final tick, start code, 50 m arrival, silence, waivers, extra stops, frozen rates (`ticks`, `ridepay`, `rideflow`), the ecash wallet incl. paying an invoice and taking a token back (`ecash`), automatic cash out (`autocashout`) and the real `@cashu/cashu-ts` client against a local test mint (`cashu-adapter`, helpers in `test/helpers/`)**. Run it after touching `lib/*`, `nostr/*`, `features/payments/*`.
@@ -32,8 +36,9 @@ Look: white UI, black buttons, bottom sheets over a full-screen map (Inter font)
 - `node scripts/export-apps.mjs [--push] [--only rider|driver] [--out DIR]` → generates the standalone
   `trevthom/nostr-ride-rider` / `nostr-ride-driver` repos (generated mirrors: never edit them; change code here, re-export).
 - No linter configured.
-- The Vite **mode** picks the app (`vite --mode rider|driver`, see `vite.config.js`); it sets
-  `__APP_ROLE__`, read through `src/config/app.js` (`APP_ROLE`, `IS_DRIVER_APP`, `APP_NAME`).
+- The Vite **mode** picks the app (`vite --mode rider|driver|goget`, see `vite.config.js`); it sets
+  `__APP_ROLE__`, read through `src/config/app.js` (`BUILD_ROLE`, `IS_GOGET`, `APP_ROLE`, `IS_DRIVER_APP`, `APP_NAME`). In the standalone apps `APP_ROLE` never changes; in GoGet it is the CONTEXT on screen
+  (`rider|driver|courier|shipper`) and moves with `setAppRole()` (live ES bindings: read them at render time, never copy them into a module-level constant). `IS_DRIVER_APP` = the person is PAID in this role (driver or courier).
   Node tests have no such constant and get `"rider"`.
 
 ## Architecture (data flow)
@@ -76,9 +81,10 @@ Reservations (`time` > 30 min away) wait under Activity → Upcoming (`isSchedul
 ## Directory map
 ```
 apps/
+  goget/  index.html main.jsx track.html track.jsx public/   # GoGet entry (all four contexts); its own key `goget_key`, service worker cache `goget-v1`
   rider/  index.html main.jsx     # rider entry (Vite root for --mode rider); public/ = manifest, icons, sw.js, theme-init.js
   driver/ index.html main.jsx     # driver entry; public/ the same (theme-init.js sets the dark look BEFORE the first paint: a plain script from our own files, the CSP allows no inline one)
-scripts/dev.mjs                   # runs both dev servers
+scripts/dev.mjs                   # runs the three dev servers
 vite.config.js                    # mode → root/outDir/port, defines __APP_ROLE__
 src/
   index.css  theme.js             # font, animations; few colors (THEME)
@@ -119,6 +125,10 @@ src/
     currency.js   # CURRENCIES, get/setCurrency, formatFiat, toMinor, satsFromFiat/fiatFromSats (pure maths)
     mints.js      # cleanMintUrl/isMintUrl/mintLabel
     trips.js      # derive current state: activeRideFor, activeDriveFor, offersForRide, rankOffers/offerGender, offerFrom, pendingOfferFor, acceptFor, upcomingRidesFor, isScheduledLater
+    cdl.js        # GoGet CDL: ENDORSEMENTS (H N P S T X), normalizeCdl/normalizeNeed/meetsCdl (X covers H and N)/normalizeCourier/cdlText/needText (pure)
+    contexts.js   # GoGet contexts (driver, courier, rider, shipper): CONTEXTS, the saved choice per account, useContextChoice
+    delivery.js   # GoGet deliveries: request/bid/accept/decline/stage/confirm events + readers: deliveryStatus, pendingBids, acceptedBid, openRequestsFor (the CDL filter), jobsFor, bidInbox, exactDelivery/placesOf, pickupCode
+    deliveryPay.js # the two-part ecash payment: splitSats, dueNow, paidSats/sentSats, payEvent/payReplyEvent, completedDeliveries
     odometer.js   # stepOdo/newOdo: miles of a GPS track (skips wobble, bad fixes, glitches) (pure)
     meter.js      # referenceMiles (driver's distance unless the rider's differs >5%), meterView, fmt* incl. fmtDurationSec (pure)
     pickup.js     # pickupChange(request): pending|accepted|declined; PICKUP_CHANGE_NOTE (the exact place logic is in privacy.js)
@@ -151,17 +161,22 @@ src/
     auth/        AuthScreen (role-aware copy) + AuthSteps (unlock, key backup)
     profile/     ProfileParts (useSaveProfile, AccountHeader, ContactMethods, RelaysSection, LogoutButton),
                  AppearanceSection (the Dark mode switch), VehicleSection, VouchesSection ("Your vouches": npub in, list out), TypicalFareSection ("Your rates", locked during a ride), CurrencySection, LightningAddressSection, WalletSection, KeysSection
+    goget/       ContextSwitch (Account → Switch role), EndorsementChips (the CDL endorsements as chips)
+    places/      PlaceSearch + PinPicker (the address search and the map pin: used by the Passenger AND by Shipping; `words` renames the page)
     ecash/       EcashSection (balance, Send, mint, paste a token, back up, driver cash out + Automatically cash out), SendEcash (token or Lightning), AutoCashOutField, useAutoCashOut, RecoverySection (RecoveryFold + RecoveryNotice: write down 12 words, show again, I-lost-a-phone) + RestorePanel, myMint.js
     payments/    PayDriver (a Lightning address: tips), AddFunds (mint invoice → ecash, NWC or any wallet), rideTicks.js (rider: payDue), redeemTicks.js (driver: redeem + reply),
                  redeemWaivers.js (rider: collect refunds), useRideLink.js (quiet phone, sign of life, 10-minute silence)
+  goget/  App.jsx (the gate: login → ContextPicker → the role's Session) ContextPicker.jsx
+  courier/ App.jsx state/CourierContext.jsx screens/ JobsScreen MineScreen JobDetail EarningsScreen AccountScreen  components/ BidForm
+  shipper/ App.jsx state/ShipperContext.jsx screens/ ShipScreen BidsScreen DeliveriesScreen DeliveryDetail AccountScreen  components/ BidCard
   rider/
-    App.jsx  state/RiderContext.jsx
+    App.jsx (exports RiderSession)  state/RiderContext.jsx
     screens/ HomeScreen (dispatch) PlanTrip (idle/search/pin/quote) ActiveTrip (searching/choose/confirm driver)
              OnTrip (enroute/arrived/riding) Receipt  ActivityScreen  AccountScreen
     state/ useRiderMeter (rider's own odometers + the 5% rule)
-    components/ PlaceSearch, PinPicker (drag the map under a pin → the pickup OR the drop-off: `field`), GenderPref, ChangePickup, AddStop, FareTerms, TipSheet, DriverInfo (+ Plate, useDriverInfo)
+    components/ GenderPref, ChangePickup, AddStop, FareTerms, TipSheet, DriverInfo (+ Plate, useDriverInfo)
   driver/
-    App.jsx  state/DriverContext.jsx  state/useDriveOdometer.js
+    App.jsx (exports DriverSession)  state/DriverContext.jsx  state/useDriveOdometer.js
     screens/ HomeScreen (dispatch) Onboarding OnlineHome (offline GO / online / incoming card / waiting) NearbyRequests (the list)
              DriveTrip  DriveSummary  EarningsScreen  AccountScreen
     components/ RiderInfo, Checklist
@@ -192,6 +207,14 @@ test/*.test.mjs
 | 30100 | RIDE_STOP_REPLY (addressable) | `e`(request), `p`(rider), `d`="stop-reply-<changeId>", `t` | `{changeId, accepted}` — only the assigned driver |
 | 30101 | RIDE_OFFER_DECLINE (addressable) | `e`(request), `e`(offer), `p`(driver), `d`="decline-<requestId>-<driver>", `t` | `{requestId, offerId}` — only the ride's rider; turns ONE driver's offer down, the request stays open |
 | 30102 | VOUCH_LIST (addressable) | `d`="vouches", `p`(each person), `t` | `{v:1, count}` — the people the author knows and trusts ("Your vouches"), at most 100, PUBLIC. A vouch is for the person (no role). The newest list replaces the old one |
+| 30103 | DELIVERY_REQUEST (addressable) | `d`(id), `t` | `{v:1, what:{type,size,note}, pickup, dropoff, time, cdl:{required,endorsements}, distanceMiles, durationMin, hide?, status, courierPubkey?, bidId?, sealed}` — GoGet: a parcel to carry. Places are COARSE (area + ~1 km grid); `sealed` = exact `{pickup, dropoff, contact}` NIP-44 to the shipper. Later versions (same author + d): `status:"assigned"` (+ `courierPubkey`, `bidId`) or `"closed"` |
+| 30104 | DELIVERY_BID (addressable) | `e`(request), `p`(shipper), `d`="bid-<key>", `t` | `{priceSats, etaMinutes, note, cdl:{has,endorsements}, vehicle, mint, upfrontPct (0/25/50/75), withdrawn?}` — a courier's offer; the newest per courier counts; `withdrawn:true` takes it back |
+| 30105 | DELIVERY_ACCEPT | `e`(bid), `e`(request), `p`(courier), `d`, `t` | `{bidId, requestId, sealed}` — only the shipper; `sealed` = exact places + contact NIP-44 to the chosen courier. Every other bid is thereby declined |
+| 30106 | DELIVERY_BID_DECLINE | `e`(request), `e`(bid), `p`(courier), `d`="decline-<bid>", `t` | `{bidId}` — only the shipper; one bid, the request stays open |
+| 30107 | DELIVERY_STAGE | `e`(request), `p`(shipper), `d`="stage-<key>-<stage>", `t` | `{stage:"delivered"\|"withdrawn", at, distM?, sealed?}` — only the chosen courier; `sealed` = `{photo}` NIP-44 to the shipper; "withdrawn" counts only before the pickup is confirmed |
+| 30108 | DELIVERY_CONFIRM | `e`(request), `p`(courier), `d`="confirm-<key>-<phase>", `t` | `{phase:"pickup"\|"delivered"\|"problem", ok, note}` — only the shipper; "pickup" = typed the 4-digit code shown on the courier's phone |
+| 30109 | DELIVERY_PAY | `e`(request), `p`(courier), `d`="pay-<key>-<phase>-<nonce>", `t` | `{phase:"pickup"\|"final", amountSats, mint, at, sealed}` — only the shipper; `sealed` = `{token}` (cashuB) NIP-44 to the courier |
+| 30110 | DELIVERY_PAY_REPLY | `e`(request), `e`(pay), `p`(shipper), `d`="pay-reply-<id>", `t` | `{payId, ok, receivedSats, reason}` — only the chosen courier; `ok:false` only for a FINAL refusal |
 | 30091 | TRIP_SHARE (addressable) | `d`="share", `t`, `expiration` | `{sealed}` — signed by a throwaway key; payload encrypted with that key (in the link #fragment) |
 | 30090 | PRESENCE (addressable) | `d`="presence", `t`, `expiration` | `{name, npub, vehicle, rates?, hide?, lat, lng, ts}` — public, coarsened location; `hide` = hide tokens of the riders the driver blocked |
 | 21100 | RIDE_LOCATION (ephemeral) | `p`(rider), `expiration` | NIP-44 encrypted `{lat, lng, ts, pm?, tm?}` — exact, to rider only; `pm`/`tm` = the driver's odometer (miles to the pickup / on the trip) |
@@ -400,6 +423,23 @@ carries `driverPubkey`. Stage is `enroute` (default) → `arrived` → `riding`.
   (`#05944f`) = driver "go"/confirm, amber = warnings, `#f7931a` = Lightning bolt, blue = "you".
 - **Public visibility**: requests/offers are public on the relays (anyone on those relays can read
   them). That is why exact points and plates are sealed; notes, fares and approximate areas are public.
+
+## GoGet (this branch): contexts and deliveries
+- **One app, four contexts** (`src/goget/App.jsx`): `Gate` = login (`AuthScreen`, GoGet copy) → `ContextPicker` (first time) → `<RiderSession|DriverSession|CourierSession|ShipperSession key={ctx+pubkey}>`. The choice is saved per account (`goget_context_<pk16>`, `lib/contexts.js`, `useContextChoice`),
+  changed in Account → **Switch role** (`features/goget/ContextSwitch.jsx`, a Fold in all four Account screens, `locked` while a ride/delivery runs). `Gate` calls `setAppRole(ctx)` BEFORE the tree renders (live bindings in `config/app.js`) and sends a stale `view` to the context's first tab (`CONTEXTS[].views/first`).
+  Taxi Driver and Passenger are the standalone apps' own `Session` components (their `App.jsx` export them): do not fork them. GoGet has its own keystore key (`goget_key`), build id, SW cache (`goget-v1`), manifest and icon (`apps/goget`).
+- **A delivery is a ride with a parcel and a price** (`lib/delivery.js`, `lib/deliveryPay.js`; tests `test/delivery.test.mjs`; e2e `scripts/e2e/goget.mjs`): request (30103, versions by author + d) → bids (30104) → the shipper accepts ONE (30105 + a new request version `assigned`+`courierPubkey`+`bidId`) → the courier shows a 4-digit pickup code
+  (`pickupCode`, the ride start code with a `delivery|` salt), the SHIPPER types it (30108 `pickup`) → pays the pickup share → the courier marks `delivered` (30107; needs a good fix within 300 m of the drop-off; optional photo sealed to the shipper) → the shipper confirms (30108 `delivered`) → pays the rest. `problem` holds the rest.
+  Status (`deliveryStatus`): requested → assigned → in_transit → delivered → completed; disputed; closed (the shipper closed it, or the courier withdrew BEFORE the pickup confirmation). Everything is derived; a reload shows the same screen.
+- **Accepting a bid declines every other** by derivation (`bidState`: once a courier is named, every other bid reads "declined"); `declineBidEvent` turns down one bid. The accepted bid is FROZEN (`acceptedBid` reads the bid id the shipper's own version names; a later bid from the courier changes nothing).
+- **CDL** (`lib/cdl.js`): self-declared, never verified (permissionless). A courier's statement lives in the profile (`courier:{cdl:{has,endorsements},vehicle}`, kind 0, `normalizeCourier`) and is copied onto every bid. A request's need is `cdl:{required,endorsements}`; `meetsCdl` (X covers H and N). **A courier who does not meet it never sees the request** (`openRequestsFor`)
+  and the shipper's app ignores a bid that does not meet it (`pendingBids`). Do not weaken either side.
+- **Money** (`lib/deliveryPay.js`): the price = the accepted bid, in sats, paid in ecash at the BID's mint in two parts: `upfrontPct` (0/25/50/75, the courier's choice) at the pickup confirmation, the rest at the delivery confirmation. No escrow, no deposit. The shipper's app pays what `dueNow` says
+  (`features/payments/payDelivery.js`, run by `ShipperContext` every 3 s; a short wallet pays what it can; `sentSats` stops a double payment); the courier's app redeems (`redeemDelivery.js`, run by `CourierContext`) and answers 30110. Accepting needs ecash at the bid's mint (`neededToAccept` = price + 1 %).
+- **Privacy**: a request carries only COARSE places (`publicPlace`) and the public description; exact places + the shipper's contact note are sealed to the shipper and again to the chosen courier in the accept. The courier's live position uses the ride-location channel (`publishRideLocation` / `subscribeRideLocation`, NIP-44, ephemeral) to the shipper of each running job.
+- **Visibility rules**: a courier sees open requests within the radius (`courierRadius`), not their own, not from a blocked shipper, not ones whose `hide` tokens name them, only ones they meet the CDL for. A shipper may have SEVERAL deliveries at once (lists, not a single active ride). A request expires 12 h after creation (ASAP) or after its pickup time (`deliveryExpiryMs`).
+- **Shared screens**: `features/places/PlaceSearch` + `PinPicker` serve the Passenger and Shipping (`words` prop). `ShipperContext` keeps the draft (`step: form|search|pin`). New settings go in a Fold. The Courier details fold is `features/profile/CourierSection.jsx`.
+- Not built yet (documented in `docs/goget.md`): tips for couriers, push while the app is closed, in-app chat, multi-stop loads, an arbiter. The rider and driver standalone apps are unaffected by everything above (`IS_GOGET` is false there).
 
 ## "Going live" swap points
 - Relays: already real (`nostr/relay.js`, `nostr/live.js`). To harden: scope relays/geography,

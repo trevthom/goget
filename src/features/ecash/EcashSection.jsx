@@ -17,7 +17,7 @@
 
 import { useState } from "react";
 import { useApp } from "../../state/AppContext.jsx";
-import { IS_DRIVER_APP } from "../../config/app.js";
+import { IS_DRIVER_APP, peerName } from "../../config/app.js";
 import { SectionLabel, ConfirmDialog, inputCls } from "../../ui/Parts.jsx";
 import Button from "../../ui/Button.jsx";
 import Icon from "../../ui/Icon.jsx";
@@ -162,7 +162,7 @@ export default function EcashSection({ locked = false }) {
             <p className="font-medium text-[15px]">{IS_DRIVER_APP ? "The mint you are paid at" : "Mint for adding funds"}</p>
             <p className="text-xs text-neutral-500 mb-2">
               A mint holds the money behind ecash, so use one you trust.
-              {IS_DRIVER_APP ? " Riders pay you at this mint. It cannot change for a ride that has started." : " During a ride you pay at the mint of the driver you choose."}
+              {IS_DRIVER_APP ? ` A ${peerName()} pays you at this mint. It cannot change for a job that has started.` : " During a ride you pay at the mint of the driver you choose."}
             </p>
             <div className="flex gap-2">
               <input aria-label="Ecash mint address" value={draft} onChange={(e) => { setDraft(e.target.value); setMsg(""); }} disabled={locked}

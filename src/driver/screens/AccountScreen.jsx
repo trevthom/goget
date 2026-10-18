@@ -19,6 +19,8 @@ import AppearanceSection from "../../features/profile/AppearanceSection.jsx";
 import WalletSection from "../../features/profile/WalletSection.jsx";
 import VouchesSection from "../../features/profile/VouchesSection.jsx";
 import EcashSection from "../../features/ecash/EcashSection.jsx";
+import ContextSwitch from "../../features/goget/ContextSwitch.jsx";
+import { IS_GOGET } from "../../config/app.js";
 import CurrencySection from "../../features/profile/CurrencySection.jsx";
 import KeysSection from "../../features/profile/KeysSection.jsx";
 import Icon from "../../ui/Icon.jsx";
@@ -48,6 +50,7 @@ export default function AccountScreen() {
         <RecoveryNotice />
 
         <div>
+          {IS_GOGET && <Fold id="context" title="Switch role" defaultOpen><ContextSwitch locked={onRide ? "a ride is running" : ""} /></Fold>}
           <Fold id="vehicle" title="Vehicle & plate" defaultOpen={gaps.some((g) => ["vehicle", "vehiclePhoto", "plate"].includes(g.id))}
             status={gaps.some((g) => ["vehicle", "vehiclePhoto", "plate"].includes(g.id)) ? { text: "Needed", tone: "warn" } : { text: "Ready", tone: "ok" }}>
             <VehicleSection

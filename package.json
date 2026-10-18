@@ -7,11 +7,14 @@
     "dev": "node scripts/dev.mjs",
     "dev:rider": "vite --mode rider",
     "dev:driver": "vite --mode driver",
-    "build": "npm run build:rider && npm run build:driver",
+    "dev:goget": "vite --mode goget",
+    "build": "npm run build:rider && npm run build:driver && npm run build:goget",
     "build:rider": "vite build --mode rider",
     "build:driver": "vite build --mode driver",
+    "build:goget": "vite build --mode goget",
     "preview:rider": "vite preview --mode rider",
     "preview:driver": "vite preview --mode driver",
+    "preview:goget": "vite preview --mode goget",
     "test": "node --test \"test/*.test.mjs\""
   },
   "dependencies": {

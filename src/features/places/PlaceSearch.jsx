@@ -10,6 +10,7 @@
 //  onChange(field, place) is called when a result is chosen.
 //  onBack() is the back arrow (one screen back); onExit() is the X that cancels the planning and goes home;
 //  onPin(field) opens the map pin picker for the pickup or the drop-off.
+//  `words` renames the page for another use (GoGet shipping): { title, pickup, dropoff, dropoffPlaceholder, hint }.
 //  onDone() shows a "Done" button (only while a field is active) once both places are set, so a rider who
 //  tapped Edit by mistake can go straight back to the quote.
 // ════════════════════════════════════════════════════════════
@@ -19,7 +20,10 @@ import { searchAddress } from "../../lib/geocode.js";
 import Icon from "../../ui/Icon.jsx";
 import { Spinner } from "../../ui/Parts.jsx";
 
-export default function PlaceSearch({ pickup, dropoff, here, near, recents, onChange, onBack, onExit, onPin, onDone }) {
+const RIDE_WORDS = { title: "Plan your ride", pickup: "Pickup location", dropoff: "Where to?", dropoffPlaceholder: "Where to?", hint: "Not sure of the address? Try entering the name of a business or landmark near you, like a store, a restaurant or a hotel.", note: "Drivers see only the approximate area until you confirm one." };
+
+export default function PlaceSearch({ pickup, dropoff, here, near, recents, onChange, onBack, onExit, onPin, onDone, words }) {
+  const W = { ...RIDE_WORDS, ...(words || {}) };
   const [focus, setFocus] = useState(null); // the active field: "pickup" | "dropoff" | null (no cursor in either)
   const [text, setText] = useState({ pickup: pickup?.name || "", dropoff: dropoff?.name || "" });
   const [results, setResults] = useState([]);
@@ -79,7 +83,7 @@ export default function PlaceSearch({ pickup, dropoff, here, near, recents, onCh
         <button type="button" onClick={onBack} aria-label="Back" className="p-2 -ml-1 rounded-full active:bg-neutral-100">
           <Icon name="chevron-left" size={24} />
         </button>
-        <h1 className="text-xl font-bold">Plan your ride</h1>
+        <h1 className="text-xl font-bold">{W.title}</h1>
         {onExit && (
           <button type="button" onClick={onExit} aria-label="Cancel and go home" className="ml-auto px-3 py-2 -mr-1 rounded-full text-[15px] font-semibold active:bg-neutral-100">
             Cancel
@@ -99,13 +103,13 @@ export default function PlaceSearch({ pickup, dropoff, here, near, recents, onCh
             <div key={field} className={`flex items-center rounded-xl px-4 ${focus === field ? "bg-white ring-2 ring-black" : "bg-neutral-100"}`}>
               <input
                 ref={inputs[field]}
-                aria-label={field === "pickup" ? "Pickup location" : "Where to?"}
+                aria-label={field === "pickup" ? W.pickup : W.dropoff}
                 value={text[field]}
                 onFocus={() => { clearTimeout(blurTimer.current); setFocus(field); setResults([]); }}
                 onBlur={() => { blurTimer.current = setTimeout(() => setFocus(null), 150); }}
                 onChange={(e) => type(field, e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter" && results.length && focus === field) { e.preventDefault(); choose(field, results[0]); } }}
-                placeholder={field === "pickup" ? "Address or business" : "Where to?"}
+                placeholder={field === "pickup" ? "Address or business" : W.dropoffPlaceholder}
                 autoComplete="off"
                 className="bg-transparent flex-1 min-w-0 py-3.5 text-[15px] placeholder-neutral-500 focus:outline-none"
               />
@@ -164,7 +168,7 @@ export default function PlaceSearch({ pickup, dropoff, here, near, recents, onCh
 
           {focus === "pickup" && !pickup && (
             <p className="px-5 mt-3 text-sm text-neutral-600" role="note">
-              Not sure of the address? Try entering the name of a business or landmark near you, like a store, a restaurant or a hotel.
+              {W.hint}
             </p>
           )}
 
@@ -178,7 +182,7 @@ export default function PlaceSearch({ pickup, dropoff, here, near, recents, onCh
         </div>
       )}
       <p className="text-neutral-400 text-xs px-5 py-4">
-        Drivers see only the approximate area until you confirm one.
+        {W.note}
       </p>
     </div>
   );

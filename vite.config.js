@@ -13,14 +13,15 @@ const buildId = () => {
   return new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC" + (sha ? " · " + sha : "");
 };
 
-// One repo, two separate apps. The Vite "mode" picks which one:
+// One repo, three apps. The Vite "mode" picks which one:
 //   vite --mode rider    → apps/rider  (port 5173, builds to dist/rider)
 //   vite --mode driver   → apps/driver (port 5174, builds to dist/driver)
-// Both share the code in src/ (Nostr protocol, libs, UI kit); each has its
+//   vite --mode goget    → apps/goget  (port 5175, builds to dist/goget): GoGet, all four contexts in one app
+// All share the code in src/ (Nostr protocol, libs, UI kit); each has its
 // own entry page, screens, and build output, so they deploy independently.
 // `__APP_ROLE__` is replaced at build time (see src/config/app.js).
 export default defineConfig(({ mode }) => {
-  const role = mode === "driver" ? "driver" : "rider";
+  const role = mode === "driver" ? "driver" : mode === "goget" ? "goget" : "rider";
   return {
     root: `apps/${role}`,
     envDir: fileURLToPath(new URL(".", import.meta.url)), // .env lives at the repo root
@@ -29,11 +30,11 @@ export default defineConfig(({ mode }) => {
     css: { postcss: { plugins: [tailwindcss(fileURLToPath(new URL("./tailwind.config.js", import.meta.url))), autoprefixer()] } },
     define: { __APP_ROLE__: JSON.stringify(role), __BUILD_ID__: JSON.stringify(buildId()) },
     server: {
-      port: role === "driver" ? 5174 : 5173,
+      port: { driver: 5174, goget: 5175 }[role] || 5173,
       // The pages live in apps/<role> but import from the repo's src/.
       fs: { allow: [fileURLToPath(new URL(".", import.meta.url))] },
     },
-    preview: { port: role === "driver" ? 4174 : 4173 },
+    preview: { port: { driver: 4174, goget: 4175 }[role] || 4173 },
     build: {
       outDir: `../../dist/${role}`,
       emptyOutDir: true,
@@ -41,11 +42,11 @@ export default defineConfig(({ mode }) => {
       // it's cached separately and doesn't bloat the main bundle.
       chunkSizeWarningLimit: 1500,
       rollupOptions: {
-        // The rider app also ships the "follow a shared trip" page (track.html).
-        input: role === "rider"
+        // The rider app and GoGet also ship the "follow a shared trip" page (track.html).
+        input: role === "rider" || role === "goget"
           ? {
-              index: fileURLToPath(new URL("./apps/rider/index.html", import.meta.url)),
-              track: fileURLToPath(new URL("./apps/rider/track.html", import.meta.url)),
+              index: fileURLToPath(new URL(`./apps/${role}/index.html`, import.meta.url)),
+              track: fileURLToPath(new URL(`./apps/${role}/track.html`, import.meta.url)),
             }
           : undefined,
         output: {

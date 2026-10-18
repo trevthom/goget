@@ -41,14 +41,20 @@ function Shell() {
   );
 }
 
-function Gate() {
-  const { user, setUser } = useApp();
-  if (!user) return <AuthScreen onLogin={setUser} />;
+// The signed-in part of the app: this role's state and its screens. GoGet mounts this for the Passenger / Taxi Driver context.
+export function DriverSession() {
+  const { user } = useApp();
   return (
     <DriverProvider key={user.publicKey}>
       <Shell />
     </DriverProvider>
   );
+}
+
+function Gate() {
+  const { user, setUser } = useApp();
+  if (!user) return <AuthScreen onLogin={setUser} />;
+  return <DriverSession />;
 }
 
 export default function DriverApp() {
