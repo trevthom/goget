@@ -16,12 +16,14 @@ node scripts/e2e/vouches.mjs         # "Your vouches" in both apps: the badge on
 node scripts/e2e/nav.mjs             # tab bar always visible, back arrow, X to cancel, pin the pickup and the drop-off, driver online on an approximate (3 km) location
 node scripts/e2e/recovery.mjs        # Account sections open and close (and are remembered); write down the 12 recovery words; a fresh browser restores the ecash from them; no phrase on any relay
 node scripts/e2e/disconnect.mjs      # the ecash wallet disconnected from the device: a driver's GO is off and says why; Connect makes a new empty wallet
+node scripts/e2e/goget.mjs         # GoGet: the context picker and slogan; Shipping posts a delivery needing a CDL endorsement; a courier without it does not see it; two bids, the Bids tab number, accepting one declines the other; the 4-digit pickup code; both halves of the ecash payment; a photo of the delivery; switching to Passenger and Taxi Driver
+node scripts/e2e/send.mjs            # sending ecash (a token, a Lightning invoice or address) and "Automatically cash out at"
 node scripts/e2e/appearance.mjs      # dark mode saves the moment it is flipped (both apps) and survives a reload without a white flash; the password eye on Remember me and Unlock
 ```
 
 `E2E_VIEWPORT=360x640` runs the same scripts in a phone-sized browser (touch, 2x pixels, the page's viewport meta honoured); with `E2E_SHOTS=/some/dir` a script saves screenshots. Check a new screen at 320x568 and 360x640.
 
-Each run builds both apps first (set `E2E_NOBUILD=1` to reuse `dist/`). The runs print one line per step and exit with code 0 only
+Each run builds the app(s) it needs first (GoGet's run serves only the GoGet build on port 4175) (set `E2E_NOBUILD=1` to reuse `dist/`). The runs print one line per step and exit with code 0 only
 when every step passed and the pages raised no errors. `ride.mjs` and `missed.mjs` use the real clock, so a minute tick takes a real minute.
 
 What they do **not** prove: behaviour against a public mint, a real Lightning wallet, a real phone's GPS, or Tailwind's styling.

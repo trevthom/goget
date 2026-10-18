@@ -1,5 +1,7 @@
 # NostrRide 🚗⚡
 
+> **Branch `GoGet`:** this branch also holds **GoGet — "You go. We get."**, one app with four contexts (Taxi Driver, Courier, Passenger, Shipping). Run it with `npm run dev:goget` (http://localhost:5175). The user guide is [`docs/goget.md`](docs/goget.md).
+
 A decentralized ridesharing system built on **Nostr**. No central server, no
 database: every ride is a set of signed Nostr events. The rider pays the driver
 **while the ride runs**, in small **ecash** payments (Cashu) from the rider's wallet. There are

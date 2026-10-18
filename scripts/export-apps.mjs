@@ -190,7 +190,8 @@ function exportOne(role) {
   for (const f of fs.readdirSync(d)) if (f !== ".git") fs.rmSync(path.join(d, f), { recursive: true, force: true });
 
   copy(path.join(SRC, "src"), path.join(d, "src"));
-  fs.rmSync(path.join(d, "src", other), { recursive: true, force: true });
+  // The other app, and the GoGet-only roles (they import both apps), are not part of a standalone app.
+  for (const gone of [other, "goget", "courier", "shipper"]) fs.rmSync(path.join(d, "src", gone), { recursive: true, force: true });
   copy(path.join(SRC, "test"), path.join(d, "test"));
   copy(path.join(SRC, "apps", role, "public"), path.join(d, "public"));
   for (const f of fs.readdirSync(path.join(SRC, "apps", role))) {

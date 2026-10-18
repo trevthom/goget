@@ -225,7 +225,7 @@ try {
     for (const t of ["Ride", "Activity", "Account"]) await tabs(A).getByText(t, { exact: true }).waitFor({ timeout: 5000 });
     await goTab(B, "Account");
     await B.getByRole("button", { name: /Taxi Driver/ }).click();
-    await B.getByText("Get ready to drive").waitFor({ timeout: 20000 });
+    await B.getByRole("button", { name: "Go online" }).waitFor({ timeout: 20000 }); // Bob's profile is complete, so the driver app shows GO
     // and back: the choice is remembered after a reload
     await goTab(A, "Account");
     await A.getByRole("button", { name: /Shipping/ }).click();
