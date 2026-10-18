@@ -441,6 +441,13 @@ carries `driverPubkey`. Stage is `enroute` (default) → `arrived` → `riding`.
 - **Shared screens**: `features/places/PlaceSearch` + `PinPicker` serve the Passenger and Shipping (`words` prop). `ShipperContext` keeps the draft (`step: form|search|pin`). New settings go in a Fold. The Courier details fold is `features/profile/CourierSection.jsx`.
 - Not built yet (documented in `docs/goget.md`): tips for couriers, push while the app is closed, in-app chat, multi-stop loads, an arbiter. The rider and driver standalone apps are unaffected by everything above (`IS_GOGET` is false there).
 
+## Sealed jobs (this branch)
+- **Every job event is sent only inside a gift wrap** (`nostr/sealing.js`: kind 1059, throwaway signer, NIP-44 of the signed inner event to ONE recipient). `SEALED_KINDS` lists them (the ride kinds 30078–30101 and the delivery kinds 30103–30110). Presence, kind 0, vouches, trip share, settings backup and the 21100/21101 pings keep their shape.
+- `relay.publish(event, {to})` wraps for: the author, every `p` tag, and `to`. `relay._ingest` opens a wrap with `relay.setIdentity(sk, pk)` (AppContext, at login), checks the inner signature and kind, and stores the INNER event, so `lib/rides.js` and `lib/delivery.js` are unchanged. Raw (old) job events are still read. The outbox stores wraps with their inner event; `outboxAge(id)` accepts an inner id.
+- **Audience** (`lib/audience.js`, `lib/audienceStore.js`, `state/AudienceSync.jsx`): a new request goes to online drivers (rides) or couriers (deliveries, CDL checked) near the pickup, nearest 60. `AudienceSync` subscribes to presence and sends waiting requests to people who appear later (`relay.sealTo`). Later versions of a request go to the audience + everyone who answered. Courier presence is kind 30090 with `role:"courier"` + `cdl` (CourierContext); `subscribePresence` drops couriers from the car map.
+- Other people's job history is not readable any more: the profile carries self-reported `stats.miles` (`lib/mileage.js`, `features/profile/MilesSync.jsx`).
+- Test relays must keep kind 1059 and answer `#p` filters. Tests: `test/sealing.test.mjs`.
+
 ## "Going live" swap points
 - Relays: already real (`nostr/relay.js`, `nostr/live.js`). To harden: scope relays/geography,
   add reconnection, fetch remote kind-0 for display names beyond the ones we pull on demand.

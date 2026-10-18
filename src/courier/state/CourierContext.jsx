@@ -13,7 +13,9 @@ import { useApp } from "../../state/AppContext.jsx";
 import { useGeolocation } from "../../lib/useGeolocation.js";
 import { useWakeLock } from "../../lib/useWakeLock.js";
 import { haversineDistance } from "../../lib/geo.js";
-import { publishRideLocation } from "../../nostr/live.js";
+import { publishRideLocation, publishPresence } from "../../nostr/live.js";
+import { canBeOnline } from "../../lib/gps.js";
+import { hideList } from "../../lib/blocks.js";
 import { getMyMint } from "../../features/ecash/myMint.js";
 import { redeemDeliveryFor } from "../../features/payments/redeemDelivery.js";
 import { bidEvent, bidsOfCourier, deliveryContent, deliveryStatus, exactDelivery, jobsFor, openRequestsFor, stageEvent, withdrawBidEvent, DELIVERED_NEAR_M, DEFAULT_UPFRONT } from "../../lib/delivery.js";
@@ -51,6 +53,24 @@ export function CourierProvider({ children }) {
     const id = setInterval(() => pullRecent(), 8000);
     return () => clearInterval(id);
   }, [pullRecent, refreshData]);
+
+  // Presence (coarse, public): "a courier is here". Requests are sealed, so a shipper's app sends a request only to couriers it
+  // sees here, and only to those whose CDL meets the need. It is never drawn as a car (nostr/live.js).
+  const posRef = useRef(myPosition);
+  posRef.current = myPosition;
+  const gpsRef = useRef(gps);
+  gpsRef.current = gps;
+  const blockedRef = useRef(blocked);
+  blockedRef.current = blocked;
+  useEffect(() => {
+    const beat = () => {
+      const p = posRef.current;
+      if (p && canBeOnline(gpsRef.current, p)) publishPresence(user, { lat: p.lat, lng: p.lng, role: "courier", cdl, hide: hideList(user.publicKey, blockedRef.current) });
+    };
+    beat();
+    const id = setInterval(beat, 20000);
+    return () => clearInterval(id);
+  }, [user, cdl.has, cdl.endorsements.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Bids ──
   const placeBid = useCallback(async (request, { priceSats, etaMinutes, note, upfrontPct = DEFAULT_UPFRONT }) => {

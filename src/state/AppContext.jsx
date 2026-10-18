@@ -20,6 +20,9 @@ import { latestVersions } from "../nostr/replaceable.js";
 import { emptyWalletState } from "../nostr/wallet.js";
 import { syncVouches } from "../nostr/vouchSync.js";
 import MilesSync from "../features/profile/MilesSync.jsx";
+import AudienceSync from "./AudienceSync.jsx";
+import { audienceFor } from "../lib/audience.js";
+import { getPeople, getAudience, addAudience, answerersOf } from "../lib/audienceStore.js";
 import { useBackup } from "./useBackup.js";
 import { applyAppearance, isDark } from "../lib/appearance.js";
 import { setUnits, getUnits } from "../lib/units.js";
@@ -162,6 +165,12 @@ export function AppProvider({ initialView, children }) {
     link.start();
   }, []);
 
+  // Who may open the gift wraps addressed to this device (nostr/sealing.js): the logged-in user.
+  useEffect(() => {
+    relay.setIdentity(user?.sk || null, user?.publicKey || null);
+    return () => relay.setIdentity(null, null);
+  }, [user?.sk, user?.publicKey]);
+
   // The ecash wallet of the logged-in user. Its code is loaded on demand (a separate chunk), proofs are
   // opened with the user's key, and anything paid but not yet claimed is claimed. `ecashTick` re-renders screens.
   const [ecash, setEcash] = useState(null);
@@ -271,9 +280,20 @@ export function AppProvider({ initialView, children }) {
         relay.publishLocal(event);
         return Promise.resolve(false);
       }
-      return relay.publish(event);
+      // Job events go out sealed (nostr/sealing.js). A request is also sent to the drivers or couriers who may take it,
+      // and later versions of it (accepted, closed) go to everyone who already holds it or answered it.
+      const to = [];
+      if (kind === EVENT_KINDS.RIDE_REQUEST || kind === EVENT_KINDS.DELIVERY_REQUEST) {
+        const d = (tagged.find((t) => t[0] === "d") || [])[1];
+        let c = null;
+        try { c = typeof content === "string" ? JSON.parse(content) : content; } catch { /* no audience */ }
+        const asked = c && c.status === "requested" ? audienceFor(kind, c, getPeople(), { me: user.publicKey, blocked }) : [];
+        to.push(...asked, ...getAudience(d), ...answerersOf(kind, d, user.publicKey));
+        addAudience(d, asked);
+      }
+      return relay.publish(event, { to });
     },
-    [user]
+    [user, blocked]
   );
 
   const publishRef = useRef(null);
@@ -426,5 +446,5 @@ export function AppProvider({ initialView, children }) {
     backup,
   };
 
-  return <AppContext.Provider value={value}><Fragment key={settingsEpoch}><MilesSync />{children}</Fragment></AppContext.Provider>;
+  return <AppContext.Provider value={value}><Fragment key={settingsEpoch}><MilesSync /><AudienceSync />{children}</Fragment></AppContext.Provider>;
 }

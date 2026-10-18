@@ -39,12 +39,13 @@ const coarse = (n) => Math.round(n * 1000) / 1000;
 // Publish one presence beat. Call this on an interval while online.
 // Addressable (d-tag "presence") so each driver has exactly one current
 // presence on the relay, with a short expiration.
-export async function publishPresence(user, { lat, lng, vehicle, rates, hide }) {
+export async function publishPresence(user, { lat, lng, vehicle, rates, hide, role, cdl }) {
   const content = JSON.stringify({
     name: user.name,
     npub: user.npub,
     vehicle: vehicle || "",
     ...(rates && { rates }), // the driver's own typical-fare rates (public, like the rest of presence)
+    ...(role === "courier" && { role, cdl: cdl || { has: false, endorsements: [] } }), // GoGet: a courier looking for parcels (never drawn as a car); the CDL decides which requests are sent to them
     ...(hide?.length && { hide }), // tokens of the riders this driver blocked: their apps do not show this car (lib/blocks.js)
     lat: coarse(lat),
     lng: coarse(lng),
@@ -70,7 +71,7 @@ export async function publishPresence(user, { lat, lng, vehicle, rates, hide }) 
 // Pulls the current set first (querySync) THEN subscribes live, so a
 // newly-opened device sees drivers who are already online. Stale drivers
 // drop after TTL. Returns an unsubscribe function.
-export function subscribePresence(onDrivers, { excludePubkey, viewerPubkey } = {}) {
+export function subscribePresence(onDrivers, { excludePubkey, viewerPubkey, role = "driver" } = {}) {
   const drivers = new Map();
   let sub = null;
   let closed = false;
@@ -86,6 +87,8 @@ export function subscribePresence(onDrivers, { excludePubkey, viewerPubkey } = {
     try {
       const d = JSON.parse(ev.content);
       if (typeof d.lat !== "number" || typeof d.lng !== "number") return;
+      if (role === "driver" && d.role === "courier") return; // a courier is not a car on the rider's map
+      if (role === "courier" && d.role !== "courier") return;
       if (hidesMe(d.hide, ev.pubkey, viewerPubkey)) return; // this driver blocked me: they do not show up for me
       const prev = drivers.get(ev.pubkey);
       const ts = d.ts || Date.now();

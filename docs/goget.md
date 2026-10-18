@@ -173,12 +173,14 @@ GoGet is permissionless and unregulated. That is the point. It also means **you 
 
 ## 10. Privacy
 
-- The public part of a delivery request names only the **area** of the pickup and the drop-off (about 1 km). The **exact addresses and your contact note are sealed** (encrypted) to you, and are sent to the courier only after you accept that courier's bid.
-- The **description** you write is public to couriers near you. Leave out private details.
+- **Every job event is sealed.** Requests, bids, accepts, stages, confirmations and payments go out only inside encrypted "gift wraps" (Nostr kind 1059). A relay sees a throwaway sender, the person who receives the wrap, and the time. It does not see the kind of event, the places, the description, the price or the CDL need.
+- A request is sent only to the **couriers (or drivers) who are online near the pickup**, and only to couriers whose CDL meets the need. A courier or driver who comes online later gets the request when your app next sees them, so keep the app open while you wait for bids.
+- The request still carries only the **area** of the pickup and the drop-off (about 1 km) for the couriers who receive it. The **exact addresses and your contact note are sealed** to you, and go to the courier only after you accept that courier's bid.
 - The courier's **live position** is encrypted and goes only to the shipper of that job.
 - The **photo** of a delivery is encrypted to the shipper.
-- Payments are sealed to the person being paid. The *amount* is public, the token is not.
-- Relays are public. Anyone who runs one can see the public parts and who talks to whom (not what is sealed).
+- Payments are sealed to the person being paid. The amount is no longer visible to a relay.
+- What a relay can still see: who receives each wrap and when, how big it is, and the things that are public on purpose: online presence (coarse, about 100 m), vouch lists and profiles. Some relays refuse or do not keep kind 1059; use relays that do (Account → Nostr relays).
+- Your **miles driven** are kept in your own profile, because other people can no longer count them from public events.
 - Your **recovery words** and **secret key** never leave your device.
 
 ---
