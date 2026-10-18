@@ -233,6 +233,11 @@ const money = P.moneyOf(reqEv);
 assert.equal(money.priceSats, 17000); assert.ok(money.owedSats <= 2, "paid in full (a sat or two of mint fee slack): " + money.owedSats);
 assert.deepEqual(D.deliveryCounts([reqEv], c1.publicKey), { carried: 1, sent: 0 });
 assert.deepEqual(D.deliveryCounts([reqEv], ship.publicKey), { carried: 0, sent: 1 });
+assert.equal(D.deliveryMiles([reqEv], c1.publicKey), 8.3, "the courier carried the route's miles");
+assert.equal(D.deliveryMiles([reqEv], ship.publicKey), 0, "the shipper drove nobody");
+const S = await import(`${R}/lib/stats.js`);
+assert.deepEqual(S.personStats(c1.publicKey, [reqEv]), { rides: 0, drives: 0, carried: 1, sent: 0, miles: 8.3 }, "profile facts: deliveries carried + miles");
+assert.equal(S.fmtMiles(8.34), "8.3 mi"); assert.equal(S.fmtMiles(1204.4), "1,204 mi"); assert.equal(S.fmtMiles(0), "0 mi");
 
 // ── 0 % upfront: everything is paid at the end; the courier may withdraw before pickup and nothing is owed ──
 const req2 = pub(D.requestEvent(user(ship), form()), ship);

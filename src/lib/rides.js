@@ -246,6 +246,22 @@ function requestIndex() {
   });
 }
 
+// Miles one pubkey has DRIVEN with riders: the metered miles of each completed drive (the meter both phones agree on, written into
+// the signed finish). A drive that ended at the destination without a meter reading counts the route's published distance.
+export function driveMiles(pubkey) {
+  return cached("miles:" + pubkey, () => {
+    const { latest } = requestIndex();
+    let miles = 0;
+    for (const e of latest) {
+      if (parse(e)?.driverPubkey !== pubkey || rideStatus(e) !== "completed") continue;
+      const fin = rideEnding(e)?.fin;
+      const metered = fin && Number.isFinite(fin.miles) ? fin.miles : null;
+      miles += metered != null ? metered : fin?.atDestination ? Number(parse(e)?.distanceMiles) || 0 : 0;
+    }
+    return Math.round(miles * 10) / 10;
+  });
+}
+
 function computeTripCounts(pubkey) {
   const { latest } = requestIndex();
   const rides = latest.filter((e) => e.pubkey === pubkey && rideStatus(e) === "completed").length;

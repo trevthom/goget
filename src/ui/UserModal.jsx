@@ -11,14 +11,15 @@ import { useApp } from "../state/AppContext.jsx";
 import { relay } from "../nostr/relay.js";
 import { getProfile } from "../nostr/profiles.js";
 import { fullNpub } from "../nostr/keys.js";
-import { tripCounts } from "../lib/rides.js";
+import { personStats, fmtMiles } from "../lib/stats.js";
+import { IS_GOGET } from "../config/app.js";
 import Avatar from "./Avatar.jsx";
 import VouchBadge from "./VouchBadge.jsx";
 import Icon from "./Icon.jsx";
 import BlockButton from "./BlockButton.jsx";
 
 export default function UserModal() {
-  const { profileModalPubkey, closeProfile } = useApp();
+  const { profileModalPubkey, closeProfile, deliveryRequests } = useApp();
   const [zoom, setZoom] = useState(false);
 
   // Escape closes the modal.
@@ -40,7 +41,7 @@ export default function UserModal() {
   if (!profileModalPubkey) return null;
 
   const p = getProfile(profileModalPubkey);
-  const rep = tripCounts(profileModalPubkey);
+  const rep = personStats(profileModalPubkey, deliveryRequests);
   const name = p?.name || "Anonymous";
   const veh = p?.vehicle || null;
 
@@ -68,17 +69,28 @@ export default function UserModal() {
         <h2 className="text-2xl font-bold">{name}</h2>
         <div className="flex justify-center"><VouchBadge pubkey={profileModalPubkey} /></div>
 
-        {/* Always show both roles, even at zero. */}
-        <div className="flex justify-center gap-8 mt-4 text-sm">
+        {/* Always show every role, even at zero. */}
+        <div className="flex justify-center gap-6 mt-4 text-sm">
           <div>
             <p className="text-neutral-500 text-[11px] font-semibold uppercase tracking-wider">As rider</p>
             <p className="font-medium">{rep.rides} trip{rep.rides === 1 ? "" : "s"}</p>
           </div>
           <div>
             <p className="text-neutral-500 text-[11px] font-semibold uppercase tracking-wider">As driver</p>
-            <p className="font-medium">{rep.drives} trip{rep.drives === 1 ? "" : "s"}</p>
+            <p className="font-medium" data-testid="modal-drives">{rep.drives} trip{rep.drives === 1 ? "" : "s"}</p>
           </div>
+          {IS_GOGET && (
+            <div>
+              <p className="text-neutral-500 text-[11px] font-semibold uppercase tracking-wider">As courier</p>
+              <p className="font-medium" data-testid="modal-carried">{rep.carried} deliver{rep.carried === 1 ? "y" : "ies"}</p>
+            </div>
+          )}
         </div>
+        {(rep.miles > 0 || IS_GOGET) && (
+          <p className="mt-3 text-sm inline-flex items-center gap-1.5 justify-center" data-testid="modal-miles">
+            <Icon name="odometer" size={16} className="text-neutral-500" /> <span className="font-medium">{fmtMiles(rep.miles)}</span> <span className="text-neutral-500">driven</span>
+          </p>
+        )}
 
         {veh && (veh.make || veh.model || veh.plateNumber || veh.picture) && (
           <div className="mt-5 border-t border-neutral-200 pt-4 text-left">

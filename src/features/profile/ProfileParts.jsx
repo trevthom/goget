@@ -12,11 +12,11 @@ import { buildSignedEvent } from "../../nostr/events.js";
 import { getMetadata } from "../../nostr/profiles.js";
 import { shortNpub } from "../../nostr/keys.js";
 import { sealVehicle } from "../../lib/privacy.js";
-import { tripCounts } from "../../lib/rides.js";
+import { personStats, fmtMiles } from "../../lib/stats.js";
 import { resizeImage } from "../../lib/image.js";
 import { useRelays, setRelays } from "../../config/relays.js";
 import { CONTACT_PLATFORMS, } from "../../config/settings.js";
-import { APP_NAME, BUILD_ID, IS_DRIVER_APP, IS_GOGET, peerName } from "../../config/app.js";
+import { APP_NAME, APP_ROLE, BUILD_ID, IS_DRIVER_APP, IS_GOGET, peerName } from "../../config/app.js";
 import Avatar from "../../ui/Avatar.jsx";
 import Icon from "../../ui/Icon.jsx";
 import Button from "../../ui/Button.jsx";
@@ -65,9 +65,9 @@ export function useSaveProfile() {
 
 // Photo, name (tap the pencil to edit), and the trip count for this app's role.
 export function AccountHeader({ photoRequired = false }) {
-  const { user } = useApp();
+  const { user, deliveryRequests } = useApp();
   const save = useSaveProfile();
-  const rep = tripCounts(user.publicKey);
+  const rep = personStats(user.publicKey, deliveryRequests);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(user.name);
   const [lightbox, setLightbox] = useState(false);
@@ -90,7 +90,9 @@ export function AccountHeader({ photoRequired = false }) {
     setEditing(false);
   };
 
-  const trips = IS_DRIVER_APP ? rep.drives : rep.rides;
+  // The plain count for the role on screen (a courier counts deliveries, a shipper deliveries sent), and for people who are PAID the miles they drove.
+  const count = APP_ROLE === "courier" ? [rep.carried, "delivery", "deliveries"] : APP_ROLE === "shipper" ? [rep.sent, "delivery sent", "deliveries sent"] : IS_DRIVER_APP ? [rep.drives, "trip", "trips"] : [rep.rides, "trip", "trips"];
+  const tripsLine = `${count[0]} ${count[0] === 1 ? count[1] : count[2]}${IS_DRIVER_APP ? ` · ${fmtMiles(rep.miles)} driven` : ""}`;
 
   return (
     <div className="flex items-center gap-4 py-2">
@@ -127,7 +129,7 @@ export function AccountHeader({ photoRequired = false }) {
             </button>
           </div>
         )}
-        <p className="text-sm text-neutral-500">{trips} trip{trips === 1 ? "" : "s"}</p>
+        <p className="text-sm text-neutral-500" data-testid="profile-stats">{tripsLine}</p>
         {photoRequired && !user.picture && <p className="text-amber-700 text-xs mt-1">A face photo is required to drive.</p>}
         {err && <p className="text-red-600 text-xs mt-1">{err}</p>}
         {user.picture && (

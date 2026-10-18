@@ -324,6 +324,17 @@ export function deliveryCounts(requests, pubkey) {
   return { carried, sent };
 }
 
+// Miles a courier carried parcels: the route distance of each completed delivery they were given (no meter runs on a delivery, so
+// this is the route the request published). Only deliveries this device can read are counted.
+export function deliveryMiles(requests, pubkey) {
+  let miles = 0;
+  for (const r of requests) {
+    if (deliveryCourier(r) !== pubkey || deliveryStatus(r) !== "completed") continue;
+    miles += Number(deliveryContent(r).distanceMiles) || 0;
+  }
+  return Math.round(miles * 10) / 10;
+}
+
 // ── Building events (the caller publishes them with useApp().publish) ──
 const newId = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 

@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 const R = new URL("../src", import.meta.url).pathname;
 const { relay } = await import(`${R}/nostr/relay.js`);
-const { rideStatus, rideEnding, tripCounts, rideVersions } = await import(`${R}/lib/rides.js`);
+const { rideStatus, rideEnding, tripCounts, rideVersions, driveMiles } = await import(`${R}/lib/rides.js`);
 const { getProfile, getMetadata } = await import(`${R}/nostr/profiles.js`);
 const { EVENT_KINDS: K } = await import(`${R}/nostr/eventKinds.js`);
 
@@ -74,6 +74,10 @@ assert.equal(dr.drives, 4, "r1b, r4, r5 and r6 started and ended: a ride finishe
 assert.equal(rr.rides, 4);
 assert.deepEqual(Object.keys(dr).sort(), ["drives", "rides"], "no rating or review figures are kept");
 assert.equal(tripCounts(attacker).drives, 0, "fake request does not count");
+// Miles driven: the metered miles of each finished drive (r4 1.2, r5 2.8, r6 1.0; r1b ended at the destination with no route length: 0).
+assert.equal(driveMiles(driver), 5, "total miles driven = the finishes' meters added up");
+assert.equal(driveMiles(rider), 0, "a rider drove nobody");
+assert.equal(driveMiles(attacker), 0, "a fake request adds no miles");
 
 // Profiles: newest kind-0 wins; hostile field types are coerced.
 ev(K.METADATA, driver, { name: "Old" }, []);
