@@ -18,6 +18,7 @@ import { canBeOnline } from "../../lib/gps.js";
 import { hideList } from "../../lib/blocks.js";
 import { getMyMint } from "../../features/ecash/myMint.js";
 import { redeemDeliveryFor } from "../../features/payments/redeemDelivery.js";
+import { useAutoCashOut } from "../../features/ecash/useAutoCashOut.js";
 import { bidEvent, bidsOfCourier, deliveryContent, deliveryStatus, exactDelivery, jobsFor, openRequestsFor, stageEvent, withdrawBidEvent, DELIVERED_NEAR_M, DEFAULT_UPFRONT } from "../../lib/delivery.js";
 import { normalizeCdl } from "../../lib/cdl.js";
 import { getSetting, setSetting } from "../../config/relays.js";
@@ -42,6 +43,7 @@ export function CourierProvider({ children }) {
     near: myPosition ? { lat: myPosition.lat, lng: myPosition.lng, radiusMiles: radius } : null,
   });
   const jobs = jobsFor(deliveryRequests, me);
+  useAutoCashOut({ locked: jobs.length > 0 }); // cashes out by itself at the amount set in Account → Wallets, never while a job runs
   const bids = bidsOfCourier(deliveryRequests, me);
   const mint = getMyMint();
   const ready = !ecashOff;

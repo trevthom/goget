@@ -220,6 +220,21 @@ try {
     throw new Error("Bob's earnings are not the full price: " + (await B.locator("body").innerText({ timeout: 2000 }).catch(() => "?")).replace(/\s+/g, " ").slice(0, 300));
   });
 
+  await step("Courier and Shipping have the automatic cash out box and the Cash out tap; the profile's address must be confirmed on the phone first", async () => {
+    for (const [P, who] of [[B, "courier"], [A, "shipper"]]) {
+      await P.context().route(/example\.com\/\.well-known\/lnurlp\//, (r) => r.fulfill({ json: { tag: "payRequest", callback: "https://example.com/lnurlp/cb", minSendable: 1000, maxSendable: 100000000000 }, headers: { "access-control-allow-origin": "*" } }));
+      await goTab(P, "Account");
+      await openFold(P, "Wallets");
+      await P.getByLabel("Automatically cash out at").waitFor({ timeout: 10000 });
+      // Nothing was typed in this browser's Wallets: the box waits for a cash out location.
+      if (!(await P.getByLabel("Automatically cash out at").isDisabled())) throw new Error(`${who}: the box should wait for a confirmed cash out location`);
+      await P.getByLabel("Cash out location (Lightning address)").fill("pin-" + who + "@example.com");
+      await P.getByLabel("Cash out location (Lightning address)").press("Enter");
+      await P.getByText(`Cash outs from this device go to pin-${who}@example.com.`).waitFor({ timeout: 20000 });
+      if (await P.getByLabel("Automatically cash out at").isDisabled()) throw new Error(`${who}: the box should work once the address is saved on this phone`);
+    }
+  });
+
   await step("a second delivery for LATER, using a recent place; couriers without a CDL need can see it", async () => {
     await goTab(A, "Ship");
     await A.getByRole("button", { name: "Document" }).click();

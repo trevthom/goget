@@ -144,6 +144,9 @@ Today, 7 days and all time, and the list of completed deliveries.
   2. the *rest* — when the shipper taps **Parcel received**.
 - There is **no escrow and no deposit**. Each side carries part of the risk, so neither carries all of it.
 - If the shipper's wallet is short, the app pays what it can and the rest stays due. The shipper sees *Add funds*.
+- A part is paid **once**. If a courier answers a payment "refused", the shipper's app does not simply pay it again: it first tries to take its own token back from the mint. If the token comes back, the part was not paid and is paid again; if the mint says the courier already took it, the part counts as paid. A courier cannot make the shipper's app pay the same part twice.
+- The courier is paid at **their** mint. A mint the shipper has never used needs an explicit *I trust this mint* before **Accept** works.
+- A token leaves the shipper's wallet only when the payment is safe on the phone (saved in the outbox) or a relay took it. A closed app loses no money.
 - A shipper who reports a problem holds the final payment. Nobody can force a payment: GoGet has no judge. See below.
 
 ---
@@ -167,6 +170,7 @@ GoGet is permissionless and unregulated. That is the point. It also means **you 
 - **Do not send illegal, dangerous or restricted goods.** Local law still applies to you, to the courier and to what you carry. Hazardous materials need the right training and endorsement in the real world; GoGet cannot check this.
 - **Meet in public** when you can, and tell someone where you are going. Passengers can share a trip with a trusted contact.
 - You can **block** anyone. They are not told. They no longer see your requests, bids or car.
+- A delivery shows up as a job only when **your own bid** was chosen by the shipper. A stranger who writes your name on a request does not get your location.
 
 ---
 
@@ -201,7 +205,7 @@ GoGet is permissionless and unregulated. That is the point. It also means **you 
 - No multiple-parcel loads, pallets with several drop-offs, or recurring deliveries.
 - No tips for couriers in this version.
 - A courier cannot see the shipper's earlier deliveries, only the shipper's vouch badge.
-- Automatic cash out works for Taxi Drivers (Account → Ecash wallet). Couriers can cash out by hand.
+- Cash out: every context has **Cash out** (a tap) and **Automatically cash out at** (Account → Wallets). The money goes only to the cash out address this phone has confirmed (a new phone asks first), so a stolen nsec cannot redirect it.
 
 ---
 

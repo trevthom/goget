@@ -22,6 +22,7 @@ import { hideList } from "../../lib/blocks.js";
 import { attemptGate, recordAttempt, checkCode } from "../../lib/startcode.js";
 import { acceptEvents, bidInbox, confirmEvent, declineBidEvent, deliveriesOf, deliveryCourier, deliveryStatus, exactDelivery, isRunning, pickupCode, requestEvent, versionEvent } from "../../lib/delivery.js";
 import { neededToAccept, dueNow } from "../../lib/deliveryPay.js";
+import { useAutoCashOut } from "../../features/ecash/useAutoCashOut.js";
 import { payDelivery } from "../../features/payments/payDelivery.js";
 import { moneyText } from "../../ui/Money.jsx";
 
@@ -61,6 +62,7 @@ export function ShipperProvider({ children }) {
   const inbox = bidInbox(deliveryRequests, me, { blocked });
   const bidCount = inbox.reduce((n, x) => n + x.bids.length, 0);
   const running = mine.filter((r) => isRunning(deliveryStatus(r)));
+  useAutoCashOut({ locked: running.length > 0 || mine.some((r) => !!dueNow(r)) }); // cashes out by itself at the amount set in Account → Wallets, never while a delivery runs or a payment is due
   const screenMayDim = useWakeLock(running.length > 0);
 
   // Bids arrive over the relays: ask for news every few seconds while something is open.

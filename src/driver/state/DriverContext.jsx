@@ -46,6 +46,7 @@ import { DEFAULT_REQUEST_RADIUS_MILES, LOCATION_PING_MS } from "../../config/set
 import { getSetting, setSetting } from "../../config/relays.js";
 import { moneyText } from "../../ui/Money.jsx";
 import { useAutoCashOut } from "../../features/ecash/useAutoCashOut.js";
+import { releaseWhenSafe } from "../../features/payments/handoff.js";
 
 const DriverContext = createContext(null);
 export const useDriver = () => useContext(DriverContext);
@@ -463,8 +464,8 @@ export function DriverProvider({ children }) {
         if (pay.sats < refund) { pushNotice(`The mint's fee left you able to send back ${moneyText(pay.sats, btcPrice)} of ${moneyText(refund, btcPrice)}.`); refund = pay.sats; }
       }
       const ev = waiverEvent(request, user, { forgivenSats: forgiven, refundSats: refund, token, reason });
-      publish(ev.kind, ev.content, ev.tags).catch(() => {});
-      if (pay) ecash.settle(pay.id);
+      const sent = publish(ev.kind, ev.content, ev.tags, { durable: true });
+      if (pay) releaseWhenSafe(ecash, pay.id, sent); // the refund token leaves the wallet only when its event is safe (handoff.js)
       refreshData();
       return true;
     },
