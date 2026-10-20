@@ -63,6 +63,7 @@ export default function DriveTrip({ request }) {
   const [contact, setContact] = useState(false);
   const [ask, setAsk] = useState(null); // "finish" | "unpaid"
   const [dismissedMissed, setDismissedMissed] = useState(0); // "rider still with me": hide the missed-payments card until it grows
+  const [dismissedRefused, setDismissedRefused] = useState(0); // the same for the refused-payment card
   const [now, setNow] = useState(Date.now());
   const [arrivedAt, setArrivedAt] = useState(null);
   const [routeInfo, setRouteInfo] = useState(null); // road time from the map's route
@@ -137,7 +138,9 @@ export default function DriveTrip({ request }) {
   // Money: what the ride has earned, what the rider has paid, how many payments are missed.
   const riding = stage === "riding";
   const missed = driveMoney?.missed || 0;
-  const showMissed = riding && missed >= MISSED_LIMIT && missed > dismissedMissed;
+  const refused = driveMoney?.refused || 0;
+  const showRefused = riding && refused > dismissedRefused;
+  const showMissed = riding && !showRefused && missed >= MISSED_LIMIT && missed > dismissedMissed;
   const link = useRideLink({
     request, role: "driver", otherHeardAt: agreed?.at ?? null, active: riding,
     onSilence: ({ cutoff }) => finishRide(request, { reason: "silence", cutoff }),
@@ -249,6 +252,16 @@ export default function DriveTrip({ request }) {
           </p>
         )}
 
+        {showRefused && (
+          <div className="mt-3 rounded-2xl border-2 border-amber-500 bg-amber-50 px-4 py-3" role="alert">
+            <p className="font-bold text-amber-900">A payment from your rider was refused.</p>
+            <p className="text-sm text-amber-900 mt-0.5">The mint did not give you that money. The rider's app may have taken it back first. You can finish the ride now. The rider still owes the fare and can pay it later.</p>
+            <div className="flex gap-2 mt-3">
+              <Button size="md" variant="danger" onClick={() => setAsk("unpaid")}>Finish ride</Button>
+              <Button size="md" variant="secondary" onClick={() => setDismissedRefused(refused)}>Keep driving</Button>
+            </div>
+          </div>
+        )}
         {showMissed && (
           <div className="mt-3 rounded-2xl border-2 border-amber-500 bg-amber-50 px-4 py-3" role="alert">
             <p className="font-bold text-amber-900">Your rider missed {missed} payments.</p>
@@ -360,7 +373,7 @@ export default function DriveTrip({ request }) {
       <ConfirmDialog
         open={ask === "unpaid"}
         title="Finish the ride?"
-        message={`Your rider missed ${missed} payments. If you finish now, the rider still owes what is missed and can pay it later after refilling their wallet.`}
+        message={`${refused > 0 && missed < MISSED_LIMIT ? "A payment from your rider was refused." : `Your rider missed ${missed} payments.`} If you finish now, the rider still owes what is missed and can pay it later after refilling their wallet.`}
         confirmLabel="Finish ride"
         cancelLabel="Keep driving"
         danger

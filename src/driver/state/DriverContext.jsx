@@ -31,7 +31,7 @@ import { canMarkArrived } from "../../lib/arrival.js";
 import { currentLedger, ledgerSummary } from "../../lib/ridemoney.js";
 import { rideTerms, rideMint } from "../../lib/terms.js";
 import { milesAt, missedTicks, MISSED_LIMIT } from "../../lib/ticks.js";
-import { paidSats, waiverEvent } from "../../lib/payments.js";
+import { paidSats, refusedTicks, waiverEvent } from "../../lib/payments.js";
 import { waiverSplit } from "../../lib/finish.js";
 import { stopReplyEvent } from "../../lib/stops.js";
 import { redeemAllFor } from "../../features/payments/redeemTicks.js";
@@ -281,6 +281,7 @@ export function DriverProvider({ children }) {
   latest.current = { rideRequests, activeDrive, user, publish, priceFor, pushNotice };
   const [driveMoney, setDriveMoney] = useState(null);
   const warned = useRef("");
+  const warnedRefused = useRef("");
   const activeKey = activeDrive ? rideKey(activeDrive) : null;
   useEffect(() => { setDriveMoney(null); }, [activeKey]);
   useEffect(() => {
@@ -300,8 +301,13 @@ export function DriverProvider({ children }) {
         if (!ledger) { setDriveMoney(null); return; }
         const sum = ledgerSummary(drive, ledger);
         const missed = missedTicks(ledger, sum.paid + sum.forgiven, Date.now());
-        setDriveMoney((m) => (m && m.owed === sum.owed && m.paid === sum.paid && m.missed === missed && m.outstanding === sum.outstanding ? m : { ...sum, missed, ledger, terms }));
+        const refused = refusedTicks(drive);
+        setDriveMoney((m) => (m && m.owed === sum.owed && m.paid === sum.paid && m.missed === missed && m.refused === refused && m.outstanding === sum.outstanding ? m : { ...sum, missed, refused, ledger, terms }));
         const key = rideKey(drive);
+        if (refused > 0 && warnedRefused.current !== key + ":" + refused) {
+          warnedRefused.current = key + ":" + refused;
+          notify("A payment from your rider was refused. You did not receive that money. You can finish the ride.");
+        }
         if (missed >= MISSED_LIMIT && warned.current !== key + ":" + missed) {
           warned.current = key + ":" + missed;
           notify(`Your rider missed ${missed} payments. You can finish the ride.`);
