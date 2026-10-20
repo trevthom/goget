@@ -22,7 +22,7 @@ import AudienceSync from "./AudienceSync.jsx";
 import { audienceFor } from "../lib/audience.js";
 import { getPeople, getAudience, addAudience, answerersOf } from "../lib/audienceStore.js";
 import { useBackup } from "./useBackup.js";
-import { applyAppearance, isDark } from "../lib/appearance.js";
+import { applyAppearance } from "../lib/appearance.js";
 import { setUnits, getUnits } from "../lib/units.js";
 import { getProfile } from "../nostr/profiles.js";
 import { myVehicle } from "../lib/privacy.js";
@@ -106,14 +106,14 @@ export function AppProvider({ initialView, children }) {
   const isBlockedPk = useCallback((pubkey) => isBlocked(blocked, pubkey), [blocked]);
 
   // The encrypted backup of vouches, blocks and settings (lib/backup.js): checked at login, kept up to date, restored on a new phone.
-  const backup = useBackup({
+  useBackup({
     user,
     publish: (...a) => publishRef.current(...a),
     onRestored: () => {
       setBlocked(getSetting("blocked", []));
       saveCurrency(getSetting("currency", getCurrency()));
       setUnits(getUnits());
-      applyAppearance(isDark());
+      applyAppearance();
       setSettingsEpoch((n) => n + 1);
     },
   });
@@ -199,16 +199,15 @@ export function AppProvider({ initialView, children }) {
     return () => { alive = false; if (off) off(); if (timer) clearInterval(timer); };
   }, [user?.publicKey, ecashOff]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Remove the ecash wallet from this device (swap the coins, then erase them and the phrase here), and the other way round.
-  const disconnectEcash = useCallback(async (opts) => {
-    if (!ecash || !offKey) return { swapped: 0 };
-    const out = await ecash.recovery.disconnect(opts);
+  // Remove the ecash wallet from this device (erase the coins and the phrase here; nothing is swapped).
+  const disconnectEcash = useCallback(async () => {
+    if (!ecash || !offKey) return;
+    await ecash.recovery.disconnect();
     const m = await import("../nostr/cashuMint.js");
     m.forgetWallet(user);
     setSetting(offKey, true);
     setEcash(null);
     setOffTick((t) => t + 1);
-    return out;
   }, [ecash, user, offKey]);
   // Create New Wallet: the wallet loads and makes its own 12 words (the screen shows them at once).
   const createEcash = useCallback(() => {
@@ -414,6 +413,22 @@ export function AppProvider({ initialView, children }) {
     return () => { alive = false; };
   }, [user?.publicKey]);
 
+  // The profile (kind 0) is shared by the Rider and Driver apps. A cash out location saved in the other app arrives with the next look at
+  // our own profile: every 5 minutes and when this app comes back to the front.
+  useEffect(() => {
+    if (!user?.publicKey) return undefined;
+    const me = user.publicKey;
+    const look = async () => {
+      await relay.fetchProfile(me);
+      const lud16 = getProfile(me)?.lud16 || "";
+      setUser((u) => (u && u.publicKey === me && (u.lud16 || "") !== lud16 ? { ...u, lud16 } : u));
+    };
+    const onVisible = () => { if (!document.hidden) look(); };
+    const id = setInterval(look, 5 * 60000);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { clearInterval(id); document.removeEventListener("visibilitychange", onVisible); };
+  }, [user?.publicKey]);
+
   // User-info modal (opened by tapping any username).
   const openProfile = useCallback((pubkey) => setProfileModalPubkey(pubkey), []);
   const closeProfile = useCallback(() => setProfileModalPubkey(null), []);
@@ -453,7 +468,6 @@ export function AppProvider({ initialView, children }) {
     unblockUser,
     isBlockedPk,
     liveTick,
-    backup,
   };
 
   return <AppContext.Provider value={value}><Fragment key={settingsEpoch}><MilesSync /><AudienceSync />{children}</Fragment></AppContext.Provider>;

@@ -44,7 +44,7 @@ export async function rideToRiding(h, opts = {}) {
     await D.getByText("You're online").waitFor({ timeout: 15000 });
     await h.login(R, h.rider, h.riderUrl);
     await R.getByRole("button", { name: "Account" }).click({ timeout: 40000 });
-    await openFold(R, "Ecash wallet");
+    await openFold(R, "Wallets");
     await R.getByRole("button", { name: /Add funds/ }).first().click();
     if (opts.fundAmount) await R.getByLabel("Amount to add").fill(opts.fundAmount);
     await R.getByRole("button", { name: "Show invoice" }).click();

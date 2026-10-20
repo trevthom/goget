@@ -29,7 +29,7 @@ const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
 
 // Nothing makes an ecash wallet by itself: Account → Ecash wallet → Create New Wallet (a warning first, then the 12 words; the dialog is closed here).
 async function makeWallet(P) {
-  await openFold(P, "Ecash wallet");
+  await openFold(P, "Wallets");
   const create = P.getByRole("button", { name: "Create New Wallet", exact: true });
   await create.waitFor({ timeout: 15000 });
   await create.click();
@@ -52,7 +52,7 @@ async function enter(name, kp, pos, context) {
 }
 async function fund(P) {
   await goTab(P, "Account");
-  await openFold(P, "Ecash wallet");
+  await openFold(P, "Wallets");
   if (await P.getByRole("button", { name: "Create New Wallet", exact: true }).count()) await makeWallet(P);
   await P.getByRole("button", { name: /Add funds/ }).first().click();
   await P.getByRole("button", { name: "Show invoice" }).click();

@@ -44,8 +44,8 @@ try {
   await step("the rider adds funds", async () => {
     await h.login(R, h.rider, h.riderUrl);
     await tap(tabs(R).getByText("Account", { exact: true }));
-    await openFold(R, "Ecash wallet");
-    if (await R.getByRole("button", { name: "Send", exact: true }).count()) throw new Error("Send shows with an empty wallet");
+    await openFold(R, "Wallets");
+    if (!(await R.getByRole("button", { name: "Send", exact: true }).isDisabled())) throw new Error("Send should be switched off with an empty wallet");
     await R.getByRole("button", { name: /Add funds/ }).first().click();
     await R.getByRole("button", { name: "Show invoice" }).click();
     for (let i = 0; i < 40 && ![...h.mint.quotes.values()].some((q) => q.state === "UNPAID"); i++) await sleep(250);
@@ -82,7 +82,7 @@ try {
   await step("the driver adds the token to a second wallet", async () => {
     await h.login(D, h.driver, h.driverUrl);
     await tap(tabs(D).getByText("Account", { exact: true }));
-    await openFold(D, "Ecash wallet");
+    await openFold(D, "Wallets");
     await D.getByLabel("Ecash token").fill(token);
     await tap(D.getByRole("button", { name: "Add", exact: true }));
     await D.getByText(/^Added /).waitFor({ timeout: 20000 });
@@ -109,7 +109,7 @@ try {
     await D.reload();
     await h.login(D, h.driver, h.driverUrl, { wallet: false }); // the wallet is already on this phone
     await tap(tabs(D).getByText("Account", { exact: true }));
-    await openFold(D, "Ecash wallet");
+    await openFold(D, "Wallets");
     if ((await D.getByLabel("Automatically cash out at").inputValue()) !== "1") throw new Error("not kept");
     await D.getByLabel("Automatically cash out at").fill("");
     await D.getByLabel("Automatically cash out at").press("Enter");
@@ -153,7 +153,7 @@ try {
     await c.page.getByRole("button", { name: "Go online" }).click({ timeout: 40000 });
     await c.page.getByText("You're online").waitFor({ timeout: 15000 });
     await tap(tabs(c.page).getByText("Account", { exact: true }));
-    await openFold(c.page, "Cash out location");
+    await openFold(c.page, "Wallets");
     if (await c.page.getByLabel("Cash out location (Lightning address)").inputValue()) throw new Error("this driver should have no cash out location");
   });
 

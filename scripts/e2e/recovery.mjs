@@ -40,8 +40,8 @@ try {
   await step("Account sections are closed at first; a tap opens and closes one; a closed section keeps what was typed", async () => {
     await h.login(R, h.rider, h.riderUrl, { wallet: false });
     await tap(tabs(R).getByText("Account", { exact: true }));
-    await header(R, "Ecash wallet").waitFor({ timeout: 40000 });
-    for (const t of ["Currency", "Ecash wallet", "Recovery phrase", "Your vouches", "Nostr relays"]) {
+    await header(R, "Wallets").waitFor({ timeout: 40000 });
+    for (const t of ["Appearance", "Wallets", "Recovery phrase", "Your vouches", "Nostr relays"]) {
       if ((await header(R, t).getAttribute("aria-expanded")) !== "false") throw new Error(t + " should start closed");
     }
     const input = R.getByLabel("npub of a person you know and trust");
@@ -54,21 +54,21 @@ try {
     if ((await input.inputValue()) !== "npub1typedbutnotsaved") throw new Error("the typed text was lost when the section closed");
     await input.fill("");
     await tap(header(R, "Your vouches"));
-    await openFold(R, "Currency");
+    await openFold(R, "Appearance");
   });
 
   await step("an opened section stays open after a reload; the others stay closed", async () => {
     await R.reload(); // the key lives in memory only, so the person signs in again; what was open is remembered on the device
     await h.login(R, h.rider, h.riderUrl, { wallet: false });
     await tap(tabs(R).getByText("Account", { exact: true }));
-    await header(R, "Currency").waitFor({ timeout: 40000 });
-    if ((await header(R, "Currency").getAttribute("aria-expanded")) !== "true") throw new Error("Currency should still be open");
-    if ((await header(R, "Ecash wallet").getAttribute("aria-expanded")) !== "false") throw new Error("Ecash wallet should still be closed");
-    await tap(header(R, "Currency"));
+    await header(R, "Appearance").waitFor({ timeout: 40000 });
+    if ((await header(R, "Appearance").getAttribute("aria-expanded")) !== "true") throw new Error("Appearance should still be open");
+    if ((await header(R, "Wallets").getAttribute("aria-expanded")) !== "false") throw new Error("Ecash wallet should still be closed");
+    await tap(header(R, "Appearance"));
   });
 
   await step("Create New Wallet: a warning first, then the 12 words are shown at once", async () => {
-    await openFold(R, "Ecash wallet");
+    await openFold(R, "Wallets");
     await tap(R.getByRole("button", { name: "Create New Wallet", exact: true }));
     await R.getByText(/12 words are the only way to get your money back/).waitFor({ timeout: 5000 });
     await tap(R.getByRole("button", { name: "Create wallet", exact: true }));
@@ -153,7 +153,7 @@ try {
     R2 = (await h.newContext("rider on a new phone", PICKUP)).page;
     await h.login(R2, h.rider, h.riderUrl, { wallet: false });
     await tap(tabs(R2).getByText("Account", { exact: true }));
-    await openFold(R2, "Ecash wallet");
+    await openFold(R2, "Wallets");
     await R2.getByRole("button", { name: "Restore my wallet", exact: true }).waitFor({ timeout: 40000 });
     if (await R2.getByText("Balance").count()) throw new Error("the new phone should have no wallet");
     await tap(R2.getByRole("button", { name: "Restore my wallet", exact: true }));
@@ -187,17 +187,10 @@ try {
     phrase2 = phrase;
   });
 
-  await step("the lost phone's coins were swapped during the restore: it can no longer spend them", async () => {
-    // The old page still holds the old coins. Ask it to swap them: the mint calls them spent, so the swap fails.
-    await tap(R.getByRole("button", { name: "I lost a phone: swap my coins" }));
-    await tap(R.getByRole("button", { name: "Swap them" }));
-    await R.getByText(/Could not swap the ecash/).waitFor({ timeout: 30000 });
-  });
-
   await step("the old phone: Disconnect ecash drops the stale coins and erases the wallet and its words from the device", async () => {
-    await openFold(R, "Ecash wallet");
+    await openFold(R, "Wallets");
     await tap(R.getByRole("button", { name: "Disconnect ecash from this device" }));
-    await tap(R.getByRole("button", { name: "Swap coins and disconnect" }));
+    await tap(R.getByRole("button", { name: "Disconnect", exact: true }));
     await R.getByText(/You have no ecash wallet on this phone yet/).waitFor({ timeout: 30000 });
     const saved = await R.evaluate(() => {
       const read = (prefix) => Object.keys(localStorage).filter((k) => k.startsWith(prefix)).map((k) => JSON.parse(localStorage.getItem(k)));

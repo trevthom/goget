@@ -14,18 +14,15 @@ import { AccountHeader, ContactMethods, RelaysSection, BlockedSection, LogoutBut
 import VehicleSection from "../../features/profile/VehicleSection.jsx";
 import TypicalFareSection from "../../features/profile/TypicalFareSection.jsx";
 import { driveGaps, gapsText } from "../../lib/profile.js";
-import LightningAddressSection from "../../features/profile/LightningAddressSection.jsx";
 import AppearanceSection from "../../features/profile/AppearanceSection.jsx";
+import WalletsSection from "../../features/profile/WalletsSection.jsx";
 import VouchesSection from "../../features/profile/VouchesSection.jsx";
-import EcashSection from "../../features/ecash/EcashSection.jsx";
 import ContextSwitch from "../../features/goget/ContextSwitch.jsx";
 import { IS_GOGET } from "../../config/app.js";
 import { useUnits, distanceIn, milesFrom } from "../../lib/units.js";
-import CurrencySection from "../../features/profile/CurrencySection.jsx";
 import KeysSection from "../../features/profile/KeysSection.jsx";
 import Icon from "../../ui/Icon.jsx";
 import Fold from "../../ui/Fold.jsx";
-import BackupSection from "../../features/profile/BackupSection.jsx";
 import { RecoveryFold, RecoveryNotice } from "../../features/ecash/RecoverySection.jsx";
 
 const GENDERS = [["", "Not set"], ["female", "Female"], ["male", "Male"]];
@@ -62,15 +59,10 @@ export default function AccountScreen() {
               gapsFor={(vehicle) => driveGaps({ ...user, vehicle })}
             />
           </Fold>
-          <Fold id="lightning-address" title="Cash out location" status={user.lud16 ? { text: "Set", tone: "ok" } : null}>
-            <LightningAddressSection value={user.lud16 || ""} onSave={(lud16) => save({ lud16 })} />
-          </Fold>
           <Fold id="appearance" title="Appearance"><AppearanceSection /></Fold>
-          <Fold id="currency" title="Currency"><CurrencySection /></Fold>
           <Fold id="rates" title="Your rates"><TypicalFareSection rates={user.rates} onSave={(rates) => save({ rates })} locked={onRide} /></Fold>
-          <Fold id="ecash" title="Ecash wallet"><EcashSection locked={onRide} /></Fold>
+          <Fold id="ecash" title="Wallets"><WalletsSection locked={onRide} /></Fold>
           <RecoveryFold />
-          <Fold id="backup" title="Backup"><BackupSection /></Fold>
 
           <Fold id="gender" title="Gender (optional)">
             <p className="text-sm text-neutral-500 mb-2">

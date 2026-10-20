@@ -106,7 +106,7 @@ export async function boot({ feePpk = 0, driverRates = null, apps = ["rider", "d
     const nav = page.locator('nav[aria-label="Main"]');
     await nav.waitFor({ timeout: 90000 });
     await nav.getByText("Account", { exact: true }).click();
-    const fold = page.locator("section h2 button", { hasText: "Ecash wallet" }).first();
+    const fold = page.locator("section h2 button", { hasText: "Wallets" }).first();
     await fold.waitFor({ timeout: 15000 });
     if ((await fold.getAttribute("aria-expanded")) !== "true") await fold.click();
     await page.getByRole("button", { name: "Create New Wallet", exact: true }).click({ timeout: 15000 });

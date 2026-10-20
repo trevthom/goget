@@ -69,7 +69,7 @@ try {
     await mustSeeTabs(R, "home after back");
     await openSearch();
     await R.getByLabel("Where to?").fill("Blue");
-    await tap(R.getByRole("button", { name: "Cancel and go home" }));
+    await tap(R.getByRole("button", { name: "Cancel", exact: true }));
     await home(R).waitFor({ timeout: 5000 });
     await openSearch();
     if (await R.getByLabel("Where to?").inputValue()) throw new Error("Cancel kept the old destination");
@@ -83,7 +83,7 @@ try {
     await R.getByRole("button", { name: /Blue Grass Airport/ }).first().click({ timeout: 10000 });
     const v = await R.getByLabel("Pickup location").inputValue();
     if (!/Blue Grass Airport/.test(v)) throw new Error("typed pickup not set: " + v);
-    await tap(R.getByRole("button", { name: "Cancel and go home" }));
+    await tap(R.getByRole("button", { name: "Cancel", exact: true }));
     await home(R).waitFor({ timeout: 5000 });
   });
 
@@ -136,7 +136,7 @@ try {
   await step("quote: tab bar, Back, the Cancel button and the X; search Back goes home", async () => {
     await toQuote();
     await mustSeeTabs(R, "quote");
-    await R.getByRole("button", { name: "Cancel and go home" }).waitFor({ timeout: 3000 });
+    await R.getByRole("button", { name: "Cancel", exact: true }).waitFor({ timeout: 3000 });
     await tap(R.getByRole("button", { name: "Back" }));
     await R.getByText("Plan your ride").waitFor({ timeout: 5000 });
     await tap(R.getByRole("button", { name: "Back" }));
@@ -146,7 +146,7 @@ try {
     await tap(R.getByRole("button", { name: "Close and go home" }));
     await home(R).waitFor({ timeout: 5000 });
     await openSearch(); await pinPickup(R); await toQuote();
-    await tap(R.getByRole("button", { name: "Cancel and go home" }));
+    await tap(R.getByRole("button", { name: "Cancel", exact: true }));
     await home(R).waitFor({ timeout: 5000 });
     await openSearch();
     await tap(tabs(R).getByText("Ride", { exact: true }));
