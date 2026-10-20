@@ -126,9 +126,9 @@ assert.equal(seen({ has: true, endorsements: ["T"] }, { blocked: [{ pubkey: ship
 assert.equal(D.openRequestsFor(reqs, { me: ship.publicKey, cdl: { has: true, endorsements: ["T"] } }).length, 0, "not your own request");
 assert.equal(D.openRequestsFor(reqs, { me: c2.publicKey, cdl: { has: true, endorsements: ["T"] }, near: { lat: 10, lng: 10, radiusMiles: 25 }, distance: miles }).length, 0, "too far away");
 // hide tokens: the shipper blocked this courier
-const hidingReq = pub(D.requestEvent(user(ship), form({ hide: B.hideList(ship.publicKey, [{ pubkey: c2.publicKey }]) })), ship);
-assert.equal(D.openRequestsFor([hidingReq], { me: c2.publicKey, cdl: { has: false } }).length, 0, "a courier the shipper blocked does not see it");
-assert.equal(D.openRequestsFor([hidingReq], { me: c3.publicKey, cdl: { has: false } }).length, 1);
+const hidingReq = pub(D.requestEvent(user(ship), form({ hide: B.hideList(ship.sk, [{ pubkey: c2.publicKey }]) })), ship);
+assert.equal(D.openRequestsFor([hidingReq], { me: c2.publicKey, sk: c2.sk, cdl: { has: false } }).length, 0, "a courier the shipper blocked does not see it");
+assert.equal(D.openRequestsFor([hidingReq], { me: c3.publicKey, sk: c3.sk, cdl: { has: false } }).length, 1);
 const openReq = pub(D.requestEvent(user(ship), form()), ship);
 assert.equal(D.openRequestsFor([openReq], { me: c2.publicKey, cdl: { has: false } }).length, 1, "no CDL need: every courier sees it");
 const staleReq = buildSignedEvent(K.DELIVERY_REQUEST, { ...JSON.parse(openReq.content) }, [["d", "old"], ["t", "nostrride"]], ship.sk);

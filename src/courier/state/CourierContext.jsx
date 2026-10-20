@@ -38,7 +38,7 @@ export function CourierProvider({ children }) {
   const cdl = normalizeCdl(user.courier?.cdl);
   const miles = (a, p) => (p && typeof p.lat === "number" ? haversineDistance(a.lat, a.lng, p.lat, p.lng) : null);
   const open = openRequestsFor(deliveryRequests, {
-    me, cdl, blocked, distance: miles,
+    me, sk: user.sk, cdl, blocked, distance: miles,
     near: myPosition ? { lat: myPosition.lat, lng: myPosition.lng, radiusMiles: radius } : null,
   });
   const jobs = jobsFor(deliveryRequests, me);
@@ -65,7 +65,7 @@ export function CourierProvider({ children }) {
   useEffect(() => {
     const beat = () => {
       const p = posRef.current;
-      if (p && canBeOnline(gpsRef.current, p)) publishPresence(user, { lat: p.lat, lng: p.lng, role: "courier", cdl, hide: hideList(user.publicKey, blockedRef.current) });
+      if (p && canBeOnline(gpsRef.current, p)) publishPresence(user, { lat: p.lat, lng: p.lng, role: "courier", cdl, hide: hideList(user.sk, blockedRef.current) });
     };
     beat();
     const id = setInterval(beat, 20000);

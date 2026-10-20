@@ -92,7 +92,7 @@ export function ShipperProvider({ children }) {
     const ev = requestEvent(user, {
       type: d.type, size: d.size, note: d.note.trim(), pickup: d.pickup, dropoff: d.dropoff, time: d.when,
       cdl: { required: d.cdlRequired, endorsements: d.endorsements }, distanceMiles: miles, durationMin: minutes, contact: d.contact.trim(),
-      hide: hideList(me, blocked),
+      hide: hideList(user.sk, blocked),
     });
     const ok = await publish(ev.kind, ev.content, ev.tags);
     setPosting(false);

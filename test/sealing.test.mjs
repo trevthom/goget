@@ -111,15 +111,15 @@ test("audience: people the rider vouches for come first, and a few places are dr
   const at = (pubkey, d) => ({ pubkey, lat: 40 + d, lng: -100 });
   // 40 fakes crowd the exact pickup; the real driver is a little further out.
   const people = [...Array.from({ length: 40 }, (_, i) => at("fake" + i, 0.0001 * i)), at("real", 0.2), at("friend", 0.4)];
-  const picked = audienceFor({ pickup: near }, people, { me: "me", limit: 30, trusted: (pk) => pk === "friend", random: () => 0 });
+  const picked = audienceFor(EVENT_KINDS.RIDE_REQUEST, { pickup: near }, people, { me: "me", limit: 30, trusted: (pk) => pk === "friend", random: () => 0 });
   assert.ok(picked.includes("friend"), "the rider's vouch is always in");
   assert.equal(picked.length, 30);
   assert.equal(new Set(picked).size, 30, "no one twice");
   // with random draws the real driver can be picked even though 40 fakes are nearer: some draw puts it in
   let hits = 0;
-  for (let i = 0; i < 40; i++) if (audienceFor({ pickup: near }, people, { me: "me", limit: 30, random: Math.random }).includes("real")) hits++;
+  for (let i = 0; i < 40; i++) if (audienceFor(EVENT_KINDS.RIDE_REQUEST, { pickup: near }, people, { me: "me", limit: 30, random: Math.random }).includes("real")) hits++;
   assert.ok(hits > 0, "the random places give a real driver a chance: " + hits + " of 40");
-  assert.deepEqual(audienceFor({ pickup: near }, people, { me: "me", limit: 0 }), [], "no room: nobody");
+  assert.deepEqual(audienceFor(EVENT_KINDS.RIDE_REQUEST, { pickup: near }, people, { me: "me", limit: 0 }), [], "no room: nobody");
 });
 
 test("presence time is believed only within a minute of the signed event's time", async () => {

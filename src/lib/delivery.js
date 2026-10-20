@@ -265,13 +265,13 @@ export function placesOf(request, user) {
 
 // ── Lists for the screens ──
 // The requests a courier may see: open (not taken, not expired), not their own, not from someone they blocked or who blocked
-// them, and meeting their CDL. `near` = { lat, lng, radiusMiles } narrows by the coarse pickup (null = no filter).
-export function openRequestsFor(requests, { me, cdl, blocked = [], near = null, now = Date.now(), distance = null } = {}) {
+// them, and meeting their CDL. `sk` = the courier's secret key (needed to read the shipper's hide tokens). `near` = { lat, lng, radiusMiles } narrows by the coarse pickup (null = no filter).
+export function openRequestsFor(requests, { me, sk = null, cdl, blocked = [], near = null, now = Date.now(), distance = null } = {}) {
   const hidden = new Set(blocked.map((b) => b.pubkey));
   return requests
     .filter((r) => r.pubkey !== me && !hidden.has(r.pubkey))
     .filter((r) => deliveryStatus(r) === "requested" && !isDeliveryExpired(r, now))
-    .filter((r) => !hidesMe(parse(r)?.hide, r.pubkey, me))
+    .filter((r) => !hidesMe(parse(r)?.hide, r.pubkey, sk)) // `sk`: this courier's secret key (hide tokens need the shared secret, lib/blocks.js)
     .filter((r) => meetsCdl(cdl, deliveryNeed(r)))
     .map((r) => ({ request: r, miles: near && distance ? distance(near, parse(r)?.pickup) : null }))
     .filter((x) => !near || x.miles == null || x.miles <= near.radiusMiles)
