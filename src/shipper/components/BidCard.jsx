@@ -2,6 +2,7 @@
 //  BID CARD — One courier's bid on a delivery, as the shipper sees it: who (photo, name, the vouch badge), the price, how soon they
 //  can be at the pickup, what they drive, the CDL they say they hold, their notes, and how much is paid when the parcel is handed over.
 //  Accept (needs enough ecash at the courier's mint, asks first: it declines every other bid) or Decline (this bid only).
+//  A mint the shipper never used is the COURIER's word, and a mint holds the money put into it: Accept waits for "I trust this mint" (features/ecash/myMint.js).
 //    <BidCard request={…} bid={…} />
 // ════════════════════════════════════════════════════════════
 
@@ -21,14 +22,17 @@ import Button from "../../ui/Button.jsx";
 import Icon from "../../ui/Icon.jsx";
 import { ConfirmDialog } from "../../ui/Parts.jsx";
 import AddFunds from "../../features/payments/AddFunds.jsx";
+import { isKnownMint, trustMint } from "../../features/ecash/myMint.js";
 
 export default function BidCard({ request, bid }) {
-  const { openProfile, btcPrice, liveTick } = useApp();
+  const { openProfile, btcPrice, liveTick, ecash } = useApp();
   const { acceptBid, declineBid, fundsFor } = useShipper();
   const [ask, setAsk] = useState(false);
   const [msg, setMsg] = useState("");
   const [adding, setAdding] = useState(null); // sats short
   const [busy, setBusy] = useState(false);
+  const [trusted, setTrusted] = useState(false);
+  const unknownMint = !trusted && !isKnownMint(bid.mint, ecash);
   useEffect(() => { relay.fetchProfile(bid.courier); }, [bid.courier]);
   void liveTick;
   const p = getProfile(bid.courier);
@@ -66,9 +70,15 @@ export default function BidCard({ request, bid }) {
       <p className="text-xs text-neutral-500 mt-2">
         {upfront > 0 ? `${bid.upfrontPct}% (${moneyText(upfront, btcPrice)}) is paid when you hand over the parcel; the rest when it arrives.` : "Nothing is paid until the parcel arrives."} Paid in ecash at {mintLabel(bid.mint)}.
       </p>
+      {unknownMint && (
+        <div className="mt-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900" role="alert">
+          <p>This courier is paid at <span className="font-semibold break-all">{mintLabel(bid.mint)}</span>, a mint you have never used. A mint holds the money put into it, and only the courier chose this one. Use it only if you trust it.</p>
+          <button type="button" onClick={() => { trustMint(bid.mint); setTrusted(true); }} className="mt-2 font-semibold underline">I trust this mint</button>
+        </div>
+      )}
       {msg && <p className="text-sm text-red-600 mt-2" role="alert">{msg}</p>}
       <div className="flex gap-2 mt-3">
-        <Button size="md" variant="go" onClick={() => setAsk(true)} loading={busy}>Accept</Button>
+        <Button size="md" variant="go" onClick={() => setAsk(true)} loading={busy} disabled={unknownMint}>Accept</Button>
         <Button size="md" variant="outline" onClick={() => declineBid(request, bid)}>Decline</Button>
       </div>
       <ConfirmDialog open={ask} title={`Accept ${name}?`} confirmLabel="Accept this bid" cancelLabel="Not yet"

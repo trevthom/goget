@@ -279,8 +279,10 @@ export function openRequestsFor(requests, { me, sk = null, cdl, blocked = [], ne
 }
 
 // The deliveries a courier has been given and has not finished: assigned / in transit / delivered, newest first.
+// A job needs consent: the courier's OWN bid exists and the shipper's version names it (`acceptedBid`). A request that merely names a courier
+// (anyone can sign one) is not a job: the app would send the courier's live position to a stranger.
 export function jobsFor(requests, me) {
-  return requests.filter((r) => deliveryCourier(r) === me && isRunning(deliveryStatus(r))).sort((a, b) => b.created_at - a.created_at);
+  return requests.filter((r) => deliveryCourier(r) === me && acceptedBid(r)?.courier === me && isRunning(deliveryStatus(r))).sort((a, b) => b.created_at - a.created_at);
 }
 // The courier's bids still waiting: [{ request, bid }], newest first (requests the courier bid on and nobody took yet).
 export function waitingBidsFor(requests, me) {

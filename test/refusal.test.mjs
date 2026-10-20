@@ -125,5 +125,76 @@ const refuse = (ride, tick) => signAs(driver, K.RIDE_TICK_REPLY, { tickId: tick.
   assert.equal(got2.length, 1, "a refund at the ride's mint is");
   assert.ok(riderW.balance(MINT) > 0);
 }
-console.log("refusal checks passed");
+
+// ── 5. The same rule for deliveries: a courier that redeems a payment and says "refused" cannot make the shipper pay it again ──
+{
+  const Dp = await import(`${R}/lib/deliveryPay.js`);
+  const Dd = await import(`${R}/lib/delivery.js`);
+  const { recoverRefusedDelivery } = await import(`${R}/features/payments/recoverRefusedDelivery.js`);
+  const { payDelivery } = await import(`${R}/features/payments/payDelivery.js`);
+  const ship = generateKeypair(), cour = generateKeypair();
+  const place = (name, lat, lng) => ({ name, lat, lng, area: "Downtown" });
+  const user = (kp) => ({ sk: kp.sk, publicKey: kp.publicKey });
+  const sign = (who, e) => signAs(who, e.kind, e.content, e.tags);
+  const setup = (name) => {
+    const req = sign(ship, Dd.requestEvent(user(ship), { type: "box", size: "small", note: name, pickup: place("A", 38.04, -84.5), dropoff: place("B", 38.1, -84.6), time: "ASAP", cdl: { required: false, endorsements: [] }, distanceMiles: 8, durationMin: 19, contact: "c" }));
+    sign(cour, Dd.bidEvent(req, user(cour), { priceSats: 20000, etaMinutes: 30, note: "", cdl: { has: false, endorsements: [] }, vehicle: "van", mint: MINT, upfrontPct: 50 }));
+    const cur = Dd.allBids(req)[0];
+    const [acc, ver] = Dd.acceptEvents(req, user(ship), cur, Dd.exactDelivery(req, user(ship)));
+    sign(ship, acc); sign(ship, ver);
+    sign(ship, Dd.confirmEvent(req, cour.publicKey, "pickup"));
+    return req;
+  };
+  const ship_ctx = (req, wallet) => ({ request: req, user: user(ship), ecash: wallet, publish: publishAs(ship) });
+  const refuseDelivery = (req, pay) => signAs(cour, K.DELIVERY_PAY_REPLY, { payId: pay.id, ok: false, receivedSats: 0, reason: "bad token" }, [["e", Dd.deliveryVersions(req)[0].id], ["e", pay.id], ["p", ship.publicKey], ["d", "pay-reply-" + pay.id], ["t", "delivery"]]);
+
+  // 5a. The courier redeems the token and still says "refused": paid once, never again.
+  {
+    const net = newNet(), shipW = build(net), courW = build(net);
+    await topUp(shipW, net, 60000);
+    const req = setup("a");
+    assert.equal((await payDelivery(ship_ctx(req, shipW))).status, "paid");
+    const pay = Dp.paysOf(req)[0];
+    await courW.redeem(Dp.payToken(pay, req, user(cour)), { only: [MINT], ref: pay.id }); // the courier takes the money ...
+    refuseDelivery(req, pay); // ... and says no
+    const before = shipW.balance(MINT);
+    const r = await payDelivery(ship_ctx(req, shipW));
+    await settleBackground();
+    assert.equal(r.status, "ok", "nothing is due again just because the courier said so");
+    assert.equal(Dp.payVerdict(pay.id), "spent", "the mint says the token is spent: the courier has the money");
+    for (let i = 0; i < 4; i++) assert.equal((await payDelivery(ship_ctx(req, shipW))).status, "ok");
+    assert.equal(shipW.balance(MINT), before, "the wallet is untouched, however often the courier refuses");
+    assert.equal(Dp.paysOf(req).length, 1, "no second payment was sent");
+  }
+  // 5b. The courier refuses a token it never took: the money comes back and the part is paid once more.
+  {
+    const net = newNet(), shipW = build(net), courW = build(net);
+    await topUp(shipW, net, 60000);
+    const req = setup("b");
+    await payDelivery(ship_ctx(req, shipW));
+    const pay = Dp.paysOf(req)[0];
+    refuseDelivery(req, pay);
+    await recoverRefusedDelivery({ request: req, user: user(ship), ecash: shipW, nowMs: Date.now() });
+    assert.equal(Dp.payVerdict(pay.id), "recovered");
+    assert.equal(Dp.sentSats(req), 0);
+    assert.equal((await payDelivery(ship_ctx(req, shipW))).status, "paid", "and it is paid again, once");
+    assert.equal(Dp.paysOf(req).length, 2);
+  }
+  // 5c. The mint cannot be reached: nothing is decided and nothing is paid again.
+  {
+    const net = newNet(), shipW = build(net);
+    await topUp(shipW, net, 60000);
+    const req = setup("c");
+    await payDelivery(ship_ctx(req, shipW));
+    const pay = Dp.paysOf(req)[0];
+    refuseDelivery(req, pay);
+    net[MINT].down = true;
+    const r = await recoverRefusedDelivery({ request: req, user: user(ship), ecash: shipW, nowMs: Date.now() });
+    assert.deepEqual(r, { recovered: 0, spent: 0, waiting: 1 });
+    assert.equal(Dp.sentSats(req), pay.amountSats, "until the mint answers the payment still counts as sent");
+    net[MINT].down = false;
+  }
+}
+
+console.log("refusal checks passed (rides and deliveries)");
 process.exit(0);

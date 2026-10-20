@@ -2,6 +2,8 @@
 // the two-part ecash payment, and who may write what.
 // Run with: npm test
 import assert from "node:assert/strict";
+const mem = {};
+globalThis.localStorage = { getItem: (k) => mem[k] ?? null, setItem: (k, v) => { mem[k] = String(v); }, removeItem: (k) => { delete mem[k]; } };
 const R = new URL("../src", import.meta.url).pathname;
 const { relay } = await import(`${R}/nostr/relay.js`);
 const D = await import(`${R}/lib/delivery.js`);
@@ -159,6 +161,14 @@ assert.equal(exactCourier.pickup.name, "12 Dock St"); assert.equal(exactCourier.
 assert.equal(D.exactDelivery(reqEv, user(c3)), null);
 assert.deepEqual(D.jobsFor([reqEv], c1.publicKey).map((r) => r.id), [reqEv.id]);
 assert.equal(D.jobsFor([reqEv], c3.publicKey).length, 0);
+// a request that merely NAMES a courier is not a job: the courier made no bid, the shipper's version names nobody's bid for them
+{
+  const named = pub(D.requestEvent(user(stranger), form()), stranger);
+  const lie = buildSignedEvent(K.DELIVERY_REQUEST, { ...JSON.parse(named.content), status: "assigned", courierPubkey: c3.publicKey, bidId: "f".repeat(64) }, [["d", named.tags.find((t) => t[0] === "d")[1]], ["t", "nostrride"]], stranger.sk);
+  lie.created_at = named.created_at + 5; relay._store(lie);
+  assert.equal(D.deliveryCourier(named), c3.publicKey, "the stranger's own version does name the courier");
+  assert.equal(D.jobsFor([named], c3.publicKey).length, 0, "but it is not a job: no bid by this courier backs it");
+}
 // a later bid from the courier cannot change the frozen terms
 bid(reqEv, c1, { priceSats: 99999 });
 assert.equal(D.acceptedBid(reqEv).priceSats, 17000, "the accepted bid is frozen");
@@ -197,9 +207,15 @@ assert.equal(P.payToken(P.paysOf(reqEv)[0], reqEv, user(c3)), null, "nobody else
 // a reply from a stranger counts for nothing; the courier's reply does
 pub(P.payReplyEvent(reqEv, pay1, { ok: true, receivedSats: 8500 }), stranger);
 assert.equal(P.paidSats(reqEv), 0);
-// a refused payment is due again
+// a payment the courier calls "refused" still counts as sent: the courier's word is not enough (it could have taken the money)
 pub(P.payReplyEvent(reqEv, pay1, { ok: false, reason: "spent" }), c1);
-assert.equal(P.paidSats(reqEv), 0); assert.equal(P.sentSats(reqEv), 0, "a refused payment was not sent");
+assert.equal(P.paidSats(reqEv), 0); assert.equal(P.sentSats(reqEv), 8500, "a refused payment still counts as sent");
+assert.equal(P.dueNow(reqEv), null, "so nothing is due again, however often the courier refuses");
+// only the shipper's own app, having taken its token back from the mint, makes the part due again
+assert.equal(P.ownPayToken(P.paysOf(reqEv)[0], reqEv, user(ship)), "cashuBtoken1", "the shipper can open the token it sent");
+assert.equal(P.ownPayToken(P.paysOf(reqEv)[0], reqEv, user(c1)), null, "and only the shipper");
+P.setPayVerdict(pay1.id, "recovered");
+assert.equal(P.sentSats(reqEv), 0, "the token came back from the mint: the part was not paid");
 due = P.dueNow(reqEv);
 assert.equal(due.amountSats, 8500, "the same part is due again");
 const pay1b = pub(P.payEvent(reqEv, c1.publicKey, user(ship), { phase: "pickup", amountSats: 8500, mint: MINT, token: "cashuBtoken2" }), ship);

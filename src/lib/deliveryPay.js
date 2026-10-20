@@ -7,7 +7,7 @@
 //  A part is ONE ecash token in a signed event (DELIVERY_PAY 30109, the token sealed to the courier); the courier's app redeems it at
 //  the mint named in the bid and answers (DELIVERY_PAY_REPLY 30110): "received", or a FINAL refusal (never for an unreachable mint).
 //  "Paid" = what the courier confirmed. A short wallet pays what it can; the rest stays due (never lost, never paid twice: a part is
-//  due only for what was not already sent).
+//  due only for what was not already sent; a payment the courier calls refused counts as sent until the shipper's app took its token back).
 //
 //    splitSats(price, pct)       → { upfront, final }
 //    dueNow(request)             → { phase, amountSats, mint, courier } | null    the next payment the shipper's app owes
@@ -19,6 +19,7 @@
 import { relay } from "../nostr/relay.js";
 import { EVENT_KINDS as K } from "../nostr/eventKinds.js";
 import { seal, unseal } from "./privacy.js";
+import { getSetting, setSetting } from "../config/relays.js";
 import { acceptedBid, confirmsOf, deliveryCourier, deliveryKey, deliveryStatus, deliveryVersions } from "./delivery.js";
 
 const parse = (e) => { try { return JSON.parse(e.content); } catch { return null; } };
@@ -90,10 +91,31 @@ export function paidSats(request, phase = null) {
     return s + (r?.ok ? Math.min(p.amountSats, (r.receivedSats || p.amountSats) + 2) : 0);
   }, 0);
 }
-// Everything the shipper sent that was not refused (so the app never pays a part twice).
+// Everything the shipper sent (so the app never pays a part twice). A payment the courier called "refused" STILL counts, until the shipper's own
+// app took the token back from the mint (features/payments/recoverRefusedDelivery.js, verdict "recovered"). The courier's word is not enough:
+// a courier could redeem the token, answer "refused", and have the shipper's app pay the same part again and again until the wallet is empty.
 export function sentSats(request, phase = null) {
-  const replies = payReplies(request);
-  return paysOf(request).filter((p) => !phase || p.phase === phase).reduce((s, p) => s + (replies.get(p.id)?.ok === false ? 0 : p.amountSats), 0);
+  return paysOf(request).filter((p) => !phase || p.phase === phase).reduce((s, p) => s + (payVerdict(p.id) === "recovered" ? 0 : p.amountSats), 0);
+}
+
+// What the shipper's app found out about a payment the courier refused: "recovered" (the token was still unspent and is back in the wallet: not paid)
+// or "spent" (the mint says the courier took it: paid, whatever the courier said). Kept on this device.
+const VERDICTS = "payRefusal";
+export function payVerdict(payId) {
+  const all = getSetting(VERDICTS, {});
+  const v = all && typeof all === "object" ? all[payId] : null;
+  return v === "r" ? "recovered" : v === "s" ? "spent" : null;
+}
+export function setPayVerdict(payId, verdict) {
+  const all = getSetting(VERDICTS, {}) || {};
+  setSetting(VERDICTS, Object.fromEntries(Object.entries({ ...all, [payId]: verdict === "recovered" ? "r" : "s" }).slice(-300)));
+}
+// The token inside a payment, opened by the SHIPPER who sent it (null if it can't be opened).
+export function ownPayToken(pay, request, user) {
+  const courier = deliveryCourier(request);
+  if (!courier || user.publicKey !== request.pubkey) return null;
+  const v = unseal(user.sk, courier, parse(pay.event)?.sealed);
+  return v && typeof v.token === "string" ? v.token : null;
 }
 
 // The next payment the shipper's app owes right now, or null. The upfront part falls due when the pickup is confirmed; the rest when
@@ -125,7 +147,7 @@ export function moneyOf(request) {
 // [{ request, fareSats (what the courier confirmed receiving), tips: [], tipSats: 0, at (seconds) }].
 export function completedDeliveries(requests, pubkey) {
   return requests
-    .filter((r) => deliveryCourier(r) === pubkey && deliveryStatus(r) === "completed")
+    .filter((r) => deliveryCourier(r) === pubkey && acceptedBid(r)?.courier === pubkey && deliveryStatus(r) === "completed")
     .map((request) => ({ request, fareSats: paidSats(request), tips: [], tipSats: 0, at: Math.floor((confirmsOf(request).get("delivered")?.at || request.created_at * 1000) / 1000) }))
     .sort((a, b) => b.at - a.at);
 }
