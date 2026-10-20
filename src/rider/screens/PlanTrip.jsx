@@ -79,7 +79,8 @@ export default function PlanTrip() {
 }
 
 function Idle() {
-  const { setPlan, plan, drivers, myPosition, geoError, gps, recentPlaces, nearestDriverEta } = useRider();
+  const { setPlan, plan, drivers, myPosition, geoError, gps, recentPlaces, nearestDriverEta, genderPref } = useRider();
+  const only = genderPref === "female" ? "female" : genderPref === "male" ? "male" : ""; // the driver preference narrows the drivers counted here
   const mapRef = useRef(null);
   const recents = recentPlaces();
   const eta = nearestDriverEta(myPosition);
@@ -127,8 +128,8 @@ function Idle() {
           {gps !== "good"
             ? `${gpsMessage(gps, myPosition, geoError)} You can still search for a pickup or pin it on the map.`
             : drivers.length
-            ? `${drivers.length} driver${drivers.length === 1 ? "" : "s"} online nearby${eta ? ` · about ${eta} min away` : ""}`
-            : "No drivers online nearby right now. You can still request a ride."}
+            ? `${drivers.length} ${only ? only + " " : ""}driver${drivers.length === 1 ? "" : "s"} online nearby${eta ? ` · about ${eta} min away` : ""}`
+            : `No ${only ? only + " " : ""}drivers online nearby right now. You can still request a ride.`}
         </p>
         <WalletPrompt className="mt-3" />
       </Sheet>
@@ -138,7 +139,7 @@ function Idle() {
 
 function Quote() {
   const { btcPrice, usdPrice, prices, currency } = useApp();
-  const { plan, setPlan, resetPlan, drivers, requestRide, nearestDriverEta, gps, myPosition, geoError, notifyNearest, setNotifyNearest, nearestOf } = useRider();
+  const { plan, setPlan, resetPlan, drivers, requestRide, nearestDriverEta, gps, myPosition, geoError, notifyNearest, setNotifyNearest, nearestOf, genderPref } = useRider();
   const { pickup, dropoff } = plan;
   const [route, setRoute] = useState(null); // { miles, minutes, straight }
   const [error, setError] = useState("");
@@ -255,7 +256,7 @@ function Quote() {
                 </ul>
               </div>
             ) : (
-              <p className="text-xs text-neutral-500">No drivers are online nearby right now. You can still request a ride.</p>
+              <p className="text-xs text-neutral-500">No {genderPref === "female" ? "female " : genderPref === "male" ? "male " : ""}drivers are online nearby right now. You can still request a ride.</p>
             )}
           </div>
         )}

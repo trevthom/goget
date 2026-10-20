@@ -70,6 +70,8 @@ try {
     await D.getByText(/Your list is public/).waitFor({ timeout: 5000 });
     await addVouch(D, fran);
     await D.getByRole("list", { name: "People you vouch for" }).getByText("Fran Friend").waitFor({ timeout: 20000 });
+    // Remove works the moment a person is added: it waits for no relay.
+    if (await D.getByRole("button", { name: /^Remove / }).first().isDisabled()) throw new Error("Remove must work right after Add");
     await snap(D, "driver-your-vouches");
     await tap(tabs(D).getByText("Drive", { exact: true }));
     await D.getByText("You're online").waitFor({ timeout: 10000 });
@@ -84,7 +86,12 @@ try {
     await R.getByRole("button", { name: /Blue Grass Airport/ }).first().click({ timeout: 10000 });
     await R.getByRole("button", { name: "Request ride", exact: true }).waitFor({ timeout: 15000 });
     await R.getByRole("button", { name: "Request ride", exact: true }).click({ timeout: 15000 });
-    await R.getByText("Finding your driver").first().waitFor({ timeout: 15000 });
+    // Two drivers are nearby: the rider browses them and asks both from the list.
+    await R.getByRole("heading", { name: "Choose a driver" }).waitFor({ timeout: 15000 });
+    await tap(R.getByRole("button", { name: "Request Dina Driver" }));
+    await R.getByText(/Waiting for a reply from Dina Driver/).waitFor({ timeout: 15000 });
+    await tap(R.getByRole("button", { name: "Request Sam Driver" }));
+    await R.getByText(/Waiting for a reply from .*Sam Driver/).waitFor({ timeout: 15000 });
   });
 
   await step("Dina's request card says 1 of her vouches knows and trusts the rider; Sam's card has no badge", async () => {
