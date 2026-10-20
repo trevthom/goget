@@ -86,7 +86,7 @@ export default function BidForm({ request, existing, onClose }) {
         <p className="font-medium">{cdlText(cdl) || "No CDL"}{`${cdl.has ? " · " : ""}`}</p>
         <button type="button" onClick={() => { onClose(); setView("account"); }} className="text-xs font-semibold underline">Change in Account → Courier details</button>
       </div>
-      <p className="text-xs text-neutral-500 mt-2">You are paid in ecash at {mintLabel(mint)}.{!ready ? " Connect your ecash wallet first." : ""}</p>
+      <p className="text-xs text-neutral-500 mt-2">You are paid in ecash at {mintLabel(mint)}.{!ready ? " Create or restore your ecash wallet first (Account)." : ""}</p>
 
       {error && <p className="text-sm text-red-600 mt-2" role="alert">{error}</p>}
       <Button className="mt-4" onClick={send} loading={busy} disabled={!sats || !ready}>{existing ? "Update bid" : "Send bid"}</Button>

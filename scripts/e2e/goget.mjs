@@ -27,16 +27,33 @@ const tabs = (p) => p.locator('nav[aria-label="Main"]');
 const goTab = (p, name) => tap(tabs(p).getByText(name, { exact: true }));
 const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", "base64");
 
+// Nothing makes an ecash wallet by itself: Account → Ecash wallet → Create New Wallet (a warning first, then the 12 words; the dialog is closed here).
+async function makeWallet(P) {
+  await openFold(P, "Ecash wallet");
+  const create = P.getByRole("button", { name: "Create New Wallet", exact: true });
+  await create.waitFor({ timeout: 15000 });
+  await create.click();
+  await P.getByRole("button", { name: "Create wallet", exact: true }).click({ timeout: 15000 });
+  await P.getByRole("dialog", { name: "Write down 12 words" }).waitFor({ timeout: 20000 });
+  await P.getByRole("button", { name: "Close", exact: true }).click();
+}
+async function ensureWallet(P) {
+  await goTab(P, "Account");
+  await makeWallet(P);
+  await tabs(P).getByRole("button").first().click(); // back to the context's first tab
+}
 async function enter(name, kp, pos, context) {
   const c = await h.newContext(name, pos);
   pages[name] = c.page;
   await h.login(c.page, kp, h.gogetUrl);
   await c.page.getByRole("button", { name: context }).click({ timeout: 60000 });
+  await ensureWallet(c.page);
   return c;
 }
 async function fund(P) {
   await goTab(P, "Account");
   await openFold(P, "Ecash wallet");
+  if (await P.getByRole("button", { name: "Create New Wallet", exact: true }).count()) await makeWallet(P);
   await P.getByRole("button", { name: /Add funds/ }).first().click();
   await P.getByRole("button", { name: "Show invoice" }).click();
   for (let i = 0; i < 40 && ![...h.mint.quotes.values()].some((q) => q.state === "UNPAID"); i++) await sleep(250);

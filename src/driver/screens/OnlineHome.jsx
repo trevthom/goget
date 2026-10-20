@@ -12,6 +12,7 @@
 //  no deposit: the rider pays in ecash as the ride runs.
 // ════════════════════════════════════════════════════════════
 
+import { WalletPrompt } from "../../features/ecash/WalletStart.jsx";
 import { formatDistance, ratePerUnit, unitName } from "../../lib/units.js";
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "../../state/AppContext.jsx";
@@ -121,7 +122,7 @@ function OfflineSheet() {
         <h2 className="text-xl font-bold mt-4">You're offline</h2>
         <p className="text-neutral-600 text-[15px] mt-1 max-w-xs" role="status">
           {ecashOff
-            ? "Your ecash wallet is not connected on this device, so you cannot be paid. Connect it in Account."
+            ? "You have no ecash wallet on this phone, so you cannot be paid."
             : !canBeOnline(gps, myPosition)
             ? gpsMessage(gps, myPosition, geoError)
             : gps === "weak"
@@ -130,6 +131,7 @@ function OfflineSheet() {
             ? `${open.length} request${open.length === 1 ? "" : "s"} near you. Go online to see them.`
             : "Go online to start getting ride requests."}
         </p>
+        {ecashOff && <WalletPrompt className="mt-3 text-left" />}
       </div>
     </Sheet>
   );

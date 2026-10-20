@@ -55,7 +55,7 @@ the rider's current ride is `activeRideFor(requests, me)`, the driver's is
 same screen. Only UI-only things (plan form, which card is open) live in React state.
 
 Shared state: `src/state/AppContext.jsx` (`useApp()`): user, tab (`view`/`setView`),
-`rideRequests`, `publish`, `pullRecent`, notices, `currency`/`prices`/`btcPrice`/`usdPrice`/`priceFor`, `ecash` (the Cashu wallet; loaded on demand), `wallet` (NWC), `liveTick`.
+`rideRequests`, `publish`, `pullRecent`, notices, `currency`/`prices`/`btcPrice`/`usdPrice`/`priceFor`, `ecash` (the Cashu wallet; loaded on demand, `null` while the device has none), `ecashOff` (this device has no wallet), `createEcash`, `restoreEcash`, `disconnectEcash`, `liveTick`.
 Role state: `src/rider/state/RiderContext.jsx` (`useRider()`) and
 `src/driver/state/DriverContext.jsx` (`useDriver()`) — mounted only after login, keyed by pubkey.
 No router: each `App.jsx` maps `view` → screen; the tab bar hides during a trip.
@@ -103,12 +103,11 @@ src/
     replaceable.js  profiles.js   # latestVersions(); getProfile/getMetadata
     live.js                       # presence (public, coarse) + ride location (NIP-44, ephemeral)
     seedbox.js                    # where the ecash recovery phrase is kept on the device: encrypted under its own key (lib/recovery.js boxKey); loadOrCreate
-    ecashRecovery.js              # makeRecovery({box,newAdapter}): the phrase for this device, the mint adapters made with its seed, confirmBackup, restore(text, urls), rotateAll; no Cashu import
+    ecashRecovery.js              # makeRecovery({box,newAdapter}): the phrase for this device, the mint adapters made with its seed, confirmBackup, rotateAll, disconnect; no Cashu import
     vouchSync.js                  # syncVouches(me): my vouch list, my vouches' lists, their names (3 small relay queries; login + every 5 min + after a change)
     share.js                      # "Share my trip": throwaway-key link, encrypted trip updates (kind 30091)
-    wallet.js                     # NIP-47 (NWC) client
     ecash.js                      # EcashWallet: Cashu bookkeeping over a "mint adapter" (fund, pay, redeem, cash out, pending/recovery, encrypted save) — no network code, no Cashu import
-    cashuMint.js                  # the REAL mint adapter on @cashu/cashu-ts (+ restore(), seed/counters) + userWallet(user) — the ONLY file that imports the Cashu library; loaded on demand (own chunk)
+    cashuMint.js                  # the REAL mint adapter on @cashu/cashu-ts (+ restore(), seed/counters) + userWallet(user) + restoreWallet(user, words, mints) (Restore my wallet) — the ONLY file that imports the Cashu library; loaded on demand (own chunk)
     reachable.js                  # probeRelay(url): a throwaway WebSocket test; never touches the pool's own connections
     link.js                       # remembers when OUR relays were unreachable (never counted as the other person's silence)
     demoData.js                   # dev-only fake riders/requests (driver app only)
@@ -163,8 +162,8 @@ src/
                  AppearanceSection (the Dark mode switch), VehicleSection, VouchesSection ("Your vouches": npub in, list out), TypicalFareSection ("Your rates", locked during a ride), CurrencySection, LightningAddressSection, WalletSection, KeysSection
     goget/       ContextSwitch (Account → Switch role), EndorsementChips (the CDL endorsements as chips)
     places/      PlaceSearch + PinPicker (the address search and the map pin: used by the Passenger AND by Shipping; `words` renames the page)
-    ecash/       EcashSection (balance, Send, mint, paste a token, back up, driver cash out + Automatically cash out), SendEcash (token or Lightning), AutoCashOutField, useAutoCashOut, RecoverySection (RecoveryFold + RecoveryNotice: write down 12 words, show again, I-lost-a-phone) + RestorePanel, myMint.js
-    payments/    PayDriver (a Lightning address: tips), AddFunds (mint invoice → ecash, NWC or any wallet), rideTicks.js (rider: payDue), redeemTicks.js (driver: redeem + reply),
+    ecash/       EcashSection (balance, Send, mint, paste a token, back up, driver cash out + Automatically cash out), SendEcash (token or Lightning), AutoCashOutField, useAutoCashOut, WalletStart (no wallet yet: Create New Wallet / Restore my wallet, and the WalletPrompt notice), RestoreWallet (the 12 words in, the wallet back), RecoverySection (RecoveryFold + RecoveryNotice: write down 12 words, show again, I-lost-a-phone), myMint.js
+    payments/    PayDriver (a Lightning address: tips), AddFunds (mint invoice → ecash, paid from any wallet), rideTicks.js (rider: payDue), redeemTicks.js (driver: redeem + reply),
                  redeemWaivers.js (rider: collect refunds), useRideLink.js (quiet phone, sign of life, 10-minute silence)
   goget/  App.jsx (the gate: login → ContextPicker → the role's Session) ContextPicker.jsx
   courier/ App.jsx state/CourierContext.jsx screens/ JobsScreen MineScreen JobDetail EarningsScreen AccountScreen  components/ BidForm
@@ -286,7 +285,7 @@ carries `driverPubkey`. Stage is `enroute` (default) → `arrived` → `riding`.
 - **Sending ecash / auto cash out** (`features/ecash/SendEcash.jsx`, `AutoCashOutField.jsx`, `useAutoCashOut.js`, `lib/autocashout.js`): *Send* makes a token with `ecash.pay` (it waits in `pending` while the dialog is open; *Done* = `settle`, *Take it back* = `reclaim(id)`: the mint says unspent → back, spent → forgotten)
   or pays a Lightning invoice / address with `ecash.payInvoice(url, invoice)` (the shared `_meltWith` tail also serves `cashOut`). Both locked while a ride runs. "Automatically cash out at" (driver app, `useAutoCashOut` in `DriverContext`): `{amount, code}` saved per account (`autoCashOut_<pk16>`), saved on blur / Enter only (never per key),
   `autoCashOutDue` = needs `lud16`, no ride, a known price, balance at ONE mint ≥ the amount, 10 min after a failure (`AUTO_RETRY_MS`); one notice per failure streak. The cash out location is OPTIONAL (no gap in `driveGaps`).
-- **Tips** still go over Lightning: the rider's `lud16` payment via `PayDriver` and a RIDE_PAYMENT `tip` record. **Evidence**: tips are re-checked by the driver app
+- **Tips** still go over Lightning: the rider's `lud16` payment via `PayDriver` (from the rider's ecash with `ecash.payInvoice`, or the driver's invoice shown for any other wallet) and a RIDE_PAYMENT `tip` record. **Evidence**: tips are re-checked by the driver app
   (`verifyPayment`: only a `verify` URL on the host of the driver's own lud16 is fetched); the tick trail (30095/30096/30097/30098) is the evidence for the ride's money.
 - **Finish ride (lib/finish.js)**: one `finishRide` action per app (rider: RiderContext, driver: DriverContext), always behind a `ConfirmDialog`. Before the `riding` marker nothing is
   owed (`closed`). A quiet phone is never a finish; `useRideLink` asks "still with you?" after 2 min (RIDE_ALIVE), and finishes with reason `silence` only when BOTH were silent for 10 min,
@@ -296,13 +295,12 @@ carries `driverPubkey`. Stage is `enroute` (default) → `arrived` → `riding`.
   currency's), `usdPrice`, `priceFor(code)`. A driver's rates carry their currency (`normalizeRates` adds `currency`, default USD; limits scale with the currency). Never guess a missing price:
   show sats / wait. Use `formatFiat(x)` (never a literal "$"). The app's own rates are dollars (use `usdPrice`).
 - **Ecash recovery phrase (lib/recovery.js, nostr/seedbox.js, nostr/ecashRecovery.js, features/ecash/RecoverySection.jsx)**: every coin the wallet MAKES for itself has a deterministic secret (Cashu NUT-13: seed of a 12-word BIP39 phrase + keyset + counter), so the phrase
-  restores the ecash on a new device (NUT-09 `restore`). Rules: (1) the phrase is its OWN secret, never derived from the nsec (a leaked nsec must not drain the wallet); (2) it is made on first open of the wallet, before any coin, and kept ONLY encrypted under `boxKey(sk)` (its own HKDF label);
+  restores the ecash on a new device (NUT-09 `restore`). Rules: (0) a device with a wallet from before this rule is simply "on" (its saved words count as a wallet); (1) the phrase is its OWN secret, never derived from the nsec (a leaked nsec must not drain the wallet); (2) it is made when the person taps **Create New Wallet** (after a warning), before any coin, and kept ONLY encrypted under `boxKey(sk)` (its own HKDF label);
   it never goes into an event, to a relay, to a mint, into a log, an error message or a URL; (3) counters live in `wallet.state.counters` and are saved BEFORE the mint is asked (`counterSource()`); (4) coins SENT to someone else use random secrets (`send: {type:"random"}` in `cashuMint.js split`),
-  so a restore never resurrects a token already handed to a driver; a restore skips proofs that are in `pending`; (5) after a restore every coin is swapped for a fresh one (`rotate`), so a copy on a lost phone is spent; (6) a restore ALWAYS sweeps the typed phrase's coins into THIS wallet's own phrase (`recovery.restore` → `wallet.restore(urls, { source })`); the typed phrase is never adopted, so it is left empty
-  (a leaked phrase / a compromised lost phone cannot take the money again) and the UI asks for this wallet's new words at once (`onRestored` → write-down modal);
+  so a restore never resurrects a token already handed to a driver; a restore skips proofs that are in `pending`; (5) after a restore every coin is swapped for a fresh one (`rotate`), so a copy on a lost phone is spent; (6) **Restore my wallet** (`cashuMint.restoreWallet`, `features/ecash/RestoreWallet.jsx`) is offered ONLY while the device has no wallet. The typed words BECOME the device's words (saved as already written down, `backedUp: true`: the person has them), nothing is swept into another phrase; `wallet.restore(urls)` finds the coins at each mint (NUT-09), keeps the unspent ones and swaps them for fresh coins under the SAME phrase (a copy on a lost phone is spent). If no mint knows a coin for the words (a typo that passes the check, the wrong mint, a mint that did not answer) EVERYTHING is undone (words, state, wallet): a wrong guess leaves no wallet behind. The last phone to restore holds the coins; another phone on the same words loses them (syncSpent drops them);
   (6b) `wallet.syncSpent()` (at load and every 5 min, in AppContext) drops coins the mint calls SPENT, asking the mint WITHOUT holding the money lock; (6c) `recovery.disconnect({force})` = syncSpent → recoverPending → refuse if a token is still pending or if money
-  exists and the words are not written down → `rotateAll` (refuse on a failed swap unless `force`) → `wallet.wipe()` + `box.erase()`; `AppContext` keeps `ecashOff` (`nostrride_ecashOff_<pk16>`), `disconnectEcash`, `connectEcash`; while off the wallet is not loaded (no new phrase is made), a driver cannot GO and a rider
-  cannot confirm a driver, and it is locked while a ride is running; (7) on "Blinded message is already signed" (10002) the adapter skips its counters ahead and retries once (another device used the numbers) and takes no coins; (8) `@cashu/cashu-ts` is pinned EXACTLY (no `^`) and
+  exists and the words are not written down → `rotateAll` (refuse on a failed swap unless `force`) → `wallet.wipe()` + `box.erase()`; `AppContext` keeps `ecashOff` (true while the setting `nostrride_ecashOff_<pk16>` is true, or while it is unset and the device holds no saved words and no saved coins: **nothing makes a wallet by itself**), `createEcash`, `restoreEcash`, `disconnectEcash`; while off the wallet is not loaded, a driver or courier cannot go online or bid, a rider cannot confirm a driver and a shipper cannot accept a bid
+  (`WalletPrompt` says so and opens Account → Ecash wallet), and it is locked while a ride is running; (7) on "Blinded message is already signed" (10002) the adapter skips its counters ahead and retries once (another device used the numbers) and takes no coins; (8) `@cashu/cashu-ts` is pinned EXACTLY (no `^`) and
   `test/recovery.test.mjs` holds the NUT-13 specification vector: a library change must not alter a derived secret. The phrase counts as safe (`backedUp`) only after the person types three words back. Old random coins (`state.legacy`) are swapped under the phrase when it is confirmed.
 - **Account folds (ui/Fold.jsx)**: every setting on both Account screens is a `<Fold id title>`: closed at first (a driver's vehicle starts open while still needed; the Lightning address section is titled **Cash out location**), open state remembered per device (`nostrride_fold_<id>`), content stays mounted while closed (typed text is kept).
   A section's own `SectionLabel`/`FoldTitle` draws nothing inside a Fold. E2E scripts open a section with `openFold(page, title)` (scripts/e2e/flow.mjs). New settings go in a Fold.
@@ -413,10 +411,9 @@ carries `driverPubkey`. Stage is `enroute` (default) → `arrived` → `riding`.
   Keep every hook above a screen's early `return null`.
 - **Login persistence**: with "Remember me" the key is saved encrypted with the user's password
   (NIP-49) under a per-app key (`nostrride_key` rider, `nostrride_driver_key` driver); a reload shows
-  Unlock. Never store the key in clear. Logout removes it. The event cache and the NWC wallet
-  connection are in memory only (cleared on reload).
-- **Wallet is live, not faked**: balance/transactions come from the user's real wallet over NIP-47.
-  A working NWC string is required; otherwise the UI shows an error, never fake data.
+  Unlock. Never store the key in clear. Logout removes it. The event cache
+  is in memory only (cleared on reload).
+- **Wallet is live, not faked**: the balance is what the Cashu wallet on this device holds at the mints; nothing is shown that the mint did not confirm. With no wallet the UI says so (`WalletStart`), never fake data. There is NO Lightning wallet (NWC) any more (removed on purpose: do not add it back).
 - **Tailwind (built, v3) and no third-party script**: the build scans `tailwind.config.js` `content` (apps/**/*.{html,jsx}, src/**/*.{js,jsx}) for class names, so write every class out in full: a class made from pieces (`"bg-" + color`) gets NO css
   (the old CDN hid this by watching the page). Arbitrary values (`bg-[#e6f4ec]`) work. `scripts/e2e` prints the class names on screen that the built CSS has no rule for (`h.missingStyles`; Leaflet's own markers are expected).
   The built html carries a CSP `<meta>` (`csp.mjs`, build only): scripts from the app's own files only, no inline script. Do not add a `<script src=…>` from another site, an inline script, or an `eval`. Colors: black = primary, green

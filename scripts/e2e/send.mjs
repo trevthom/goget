@@ -107,7 +107,7 @@ try {
 
   await step("the setting is kept after a reload; an empty field turns it off", async () => {
     await D.reload();
-    await h.login(D, h.driver, h.driverUrl);
+    await h.login(D, h.driver, h.driverUrl, { wallet: false }); // the wallet is already on this phone
     await tap(tabs(D).getByText("Account", { exact: true }));
     await openFold(D, "Ecash wallet");
     if ((await D.getByLabel("Automatically cash out at").inputValue()) !== "1") throw new Error("not kept");

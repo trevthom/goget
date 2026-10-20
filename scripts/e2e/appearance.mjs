@@ -27,7 +27,7 @@ try {
       if (await isDark(P)) throw new Error("dark without being asked");
     });
     await step(`${role}: Dark mode saves and applies the moment it is flipped`, async () => {
-      await h.login(P, role === "rider" ? h.rider : h.driver, url);
+      await h.login(P, role === "rider" ? h.rider : h.driver, url, { wallet: false });
       await P.getByRole("button", { name: "Account" }).click({ timeout: 40000 });
       await openFold(P, "Appearance");
       const light = await bg(P);
@@ -52,7 +52,7 @@ try {
       await P.getByRole("button", { name: "Account" }).waitFor({ timeout: 40000 }).catch(() => {});
     });
     await step(`${role}: switching back to light saves too`, async () => {
-      await h.login(P, role === "rider" ? h.rider : h.driver, url).catch(() => {});
+      await h.login(P, role === "rider" ? h.rider : h.driver, url, { wallet: false }).catch(() => {});
       await P.getByRole("button", { name: "Account" }).click({ timeout: 40000 });
       await openFold(P, "Appearance");
       await P.getByRole("switch", { name: "Dark mode" }).click();

@@ -1,8 +1,7 @@
 // ════════════════════════════════════════════════════════════
 //  ADD FUNDS — Fill the ecash wallet by paying a Lightning invoice. The
 //  mint makes the invoice; once it is paid, the app collects the ecash.
-//    • with a connected Lightning wallet (NWC) it pays the invoice in one tap;
-//    • otherwise it shows the invoice (QR / text / "open wallet") for any wallet.
+//  It shows the invoice (QR / text / "open wallet") for any wallet.
 //  A paid invoice that is not collected yet (the app was closed) is collected the
 //  next time the app opens (ecash.claimAll), so a payment is never lost.
 //
@@ -12,7 +11,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "../../state/AppContext.jsx";
-import { payInvoice } from "../../nostr/wallet.js";
 import { mintLabel } from "../../lib/mints.js";
 import { satsFromFiat } from "../../lib/currency.js";
 import { Modal } from "../../ui/Parts.jsx";
@@ -25,12 +23,12 @@ import { moneyText } from "../../ui/Money.jsx";
 const MIN = 100, MAX = 5_000_000;
 
 export default function AddFunds({ mint, needSats = 0, onClose, onDone }) {
-  const { ecash, wallet, btcPrice } = useApp();
+  const { ecash, btcPrice } = useApp();
   // Start a little above what is needed (a round, useful amount), and at least about 5 in local money.
   const start = Math.min(MAX, Math.max(MIN, Math.ceil((needSats * 1.25) / 100) * 100, btcPrice ? Math.round((satsFromFiat(5, btcPrice) || 0) / 100) * 100 : 5000));
   const [sats, setSats] = useState(start);
   const [quote, setQuote] = useState(null); // { id, invoice }
-  const [busy, setBusy] = useState(""); // "" | "making" | "paying"
+  const [busy, setBusy] = useState(""); // "" | "making"
   const [error, setError] = useState("");
   const [done, setDone] = useState(null); // sats added
   const [mode, setMode] = useState("qr");
@@ -55,14 +53,13 @@ export default function AddFunds({ mint, needSats = 0, onClose, onDone }) {
 
   const ok = Number.isFinite(sats) && sats >= MIN && sats <= MAX;
 
-  const make = async (payWithWallet) => {
-    setBusy(payWithWallet ? "paying" : "making");
+  const make = async () => {
+    setBusy("making");
     setError("");
     try {
       const q = await ecash.fundStart(mint, Math.round(sats));
       if (!alive.current) return;
       setQuote({ id: q.id, invoice: q.invoice });
-      if (payWithWallet) await payInvoice(wallet, q.invoice);
     } catch (e) {
       setError(e.message || "Something went wrong.");
     }
@@ -89,15 +86,7 @@ export default function AddFunds({ mint, needSats = 0, onClose, onDone }) {
           {needSats > 0 && <p className="text-xs text-neutral-500 mt-2">This ride needs about {moneyText(needSats, btcPrice)} to start.</p>}
           {error && <p className="text-red-600 text-sm mt-3" role="alert">{error}</p>}
           <div className="mt-4 space-y-2">
-            {wallet.connected && (
-              <Button onClick={() => make(true)} disabled={!ok || !ecash} loading={busy === "paying"}>
-                <Icon name="zap" size={18} /> Pay with my wallet
-              </Button>
-            )}
-            <Button variant={wallet.connected ? "secondary" : "primary"} onClick={() => make(false)} disabled={!ok || !ecash} loading={busy === "making"}>
-              {wallet.connected ? "Show an invoice instead" : "Show invoice"}
-            </Button>
-            {!wallet.connected && <p className="text-xs text-neutral-500 text-center">Connect a Lightning wallet in Account to pay in one tap.</p>}
+            <Button onClick={make} disabled={!ok || !ecash} loading={busy === "making"}>Show invoice</Button>
           </div>
           <p className="text-xs text-neutral-500 mt-4">
             The mint {mintLabel(mint)} holds the money behind your ecash. Only add what you plan to ride with.
@@ -106,7 +95,7 @@ export default function AddFunds({ mint, needSats = 0, onClose, onDone }) {
       ) : (
         <div className="text-center">
           <p className="text-neutral-600 text-sm mb-3">
-            {busy === "paying" ? "Paying with your wallet…" : "Pay this invoice. This screen updates by itself when the money arrives."}
+            Pay this invoice. This screen updates by itself when the money arrives.
           </p>
           <div className="flex gap-2 justify-center mb-3 flex-wrap">
             {[["qr", "QR code"], ["string", "Invoice"], ["url", "Open wallet"]].map(([id, label]) => (

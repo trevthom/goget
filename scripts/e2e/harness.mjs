@@ -99,13 +99,31 @@ export async function boot({ feePpk = 0, driverRates = null, apps = ["rider", "d
     return { ctx, page };
   }
 
-  async function login(page, who, appUrl) {
+  // Nothing makes an ecash wallet by itself (Account → Ecash wallet → Create New Wallet), so by default a login of the two standalone apps also
+  // creates one, through the screens, closes the write-down dialog and goes back to the first tab. `{ wallet: false }` leaves the device
+  // without one. A GoGet login never does (the context picker comes first: goget.mjs creates the wallet where it is needed).
+  async function createWallet(page, face) {
+    const nav = page.locator('nav[aria-label="Main"]');
+    await nav.waitFor({ timeout: 90000 });
+    await nav.getByText("Account", { exact: true }).click();
+    const fold = page.locator("section h2 button", { hasText: "Ecash wallet" }).first();
+    await fold.waitFor({ timeout: 15000 });
+    if ((await fold.getAttribute("aria-expanded")) !== "true") await fold.click();
+    await page.getByRole("button", { name: "Create New Wallet", exact: true }).click({ timeout: 15000 });
+    await page.getByRole("button", { name: "Create wallet", exact: true }).click({ timeout: 15000 });
+    await page.getByRole("dialog", { name: "Write down 12 words" }).waitFor({ timeout: 20000 });
+    await page.getByRole("button", { name: "Close", exact: true }).click();
+    await nav.getByText(face === "drive" ? "Drive" : "Ride", { exact: true }).click();
+  }
+
+  async function login(page, who, appUrl, { wallet = true } = {}) {
     await page.goto(appUrl);
     await page.getByText("I have a key", { exact: true }).click({ timeout: 90000 });
     await page.getByPlaceholder("nsec1...").fill(who.nsec);
     const remember = page.getByLabel(/Remember me/);
     if (await remember.isChecked()) await remember.uncheck();
     await page.getByRole("button", { name: "Continue" }).click();
+    if (wallet && !appUrl.includes(":4175")) await createWallet(page, appUrl.includes(":4174") ? "drive" : "ride");
   }
 
   const stop = async () => {
@@ -121,5 +139,5 @@ export async function boot({ feePpk = 0, driverRates = null, apps = ["rider", "d
     const tokens = await page.evaluate(() => [...(window.__seenClasses || [])]);
     return tokens.filter((t) => !css.includes("." + esc(t)) && !/^(group|peer|nr-up)$/.test(t)).sort();
   };
-  return { relay, mint, rider, driver, seedDriver, missingStyles, newKeys: () => Keys.generateKeypair(), browser, errors, newContext, login, stop, riderUrl: "http://localhost:4173/", driverUrl: "http://localhost:4174/", gogetUrl: "http://localhost:4175/" };
+  return { relay, mint, rider, driver, seedDriver, missingStyles, newKeys: () => Keys.generateKeypair(), browser, errors, newContext, login, createWallet, stop, riderUrl: "http://localhost:4173/", driverUrl: "http://localhost:4174/", gogetUrl: "http://localhost:4175/" };
 }

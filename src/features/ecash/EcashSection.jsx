@@ -1,5 +1,5 @@
 // ════════════════════════════════════════════════════════════
-//  ECASH SECTION — The Account part for the ecash wallet, in both apps.
+//  ECASH SECTION — The Account part for the ecash wallet, in every context.
 //  A ride is paid tick by tick in ecash (lib/ticks.js): the rider pays
 //  from this wallet, the driver is paid into it.
 //    • balance, per mint;  Add funds (Lightning → ecash)
@@ -10,8 +10,8 @@
 //    • driver: cash out to their Lightning address, and "Automatically cash out at: $" (AutoCashOutField, runs in useAutoCashOut)
 //    • Send ecash (SendEcash): a token for another ecash wallet, or a Lightning invoice / address
 //    • Disconnect ecash from this device: the coins are swapped for new ones (a copy taken earlier is then worth nothing), then the coins
-//      and the recovery phrase are erased HERE; the money stays at the mint and comes back with the 12 words. While disconnected, this part
-//      offers to connect a new, empty wallet.
+//      and the recovery phrase are erased HERE; the money stays at the mint and comes back with the 12 words.
+//    • While this device has NO wallet (a new phone, or after Disconnect) this part shows WalletStart: Create New Wallet or Restore my wallet.
 //  The ecash is saved on this device, encrypted to your key. Logging out keeps it.
 // ════════════════════════════════════════════════════════════
 
@@ -28,9 +28,10 @@ import AddFunds from "../payments/AddFunds.jsx";
 import SendEcash from "./SendEcash.jsx";
 import AutoCashOutField from "./AutoCashOutField.jsx";
 import { getMyMint, setMyMint } from "./myMint.js";
+import WalletStart from "./WalletStart.jsx";
 
 export default function EcashSection({ locked = false }) {
-  const { ecash, ecashOff, disconnectEcash, connectEcash, user, btcPrice, pushNotice } = useApp();
+  const { ecash, ecashOff, disconnectEcash, user, btcPrice, pushNotice } = useApp();
   const [mint, setMint] = useState(getMyMint());
   const [draft, setDraft] = useState(mint);
   const [adding, setAdding] = useState(false);
@@ -112,12 +113,7 @@ export default function EcashSection({ locked = false }) {
     return (
       <section>
         <SectionLabel>Ecash wallet</SectionLabel>
-        <p className="text-sm text-neutral-500 mb-3">
-          The ecash wallet is not connected on this device, so there is no ecash here.
-          {IS_DRIVER_APP ? " You cannot go online or be paid until you connect it." : " You cannot choose a driver until you connect it."}
-          {" "}Connecting makes a new, empty wallet with new 12 words. To bring back ecash from an earlier wallet, connect first, then use <em>Restore</em> in Recovery phrase.
-        </p>
-        <Button onClick={connectEcash}>Connect ecash wallet</Button>
+        <WalletStart />
       </section>
     );
   }
@@ -200,12 +196,12 @@ export default function EcashSection({ locked = false }) {
             <button type="button" onClick={askDisconnect} disabled={locked || busy === "off"} className="text-sm font-semibold underline text-red-600 disabled:text-neutral-400">
               {busy === "off" ? "Disconnecting…" : "Disconnect ecash from this device"}
             </button>
-            <p className="text-xs text-neutral-500 mt-1">{locked ? "Not while a ride is running." : "Use this on a phone you are about to lose, sell or stop trusting. The money stays at the mint and comes back with your 12 words."}</p>
+            <p className="text-xs text-neutral-500 mt-1">{locked ? "Not while a ride is running." : "Use this on a phone you are about to lose, sell or stop trusting. The money stays at the mint. Restore my wallet brings it back with your 12 words."}</p>
             {swapFailed && <Button variant="danger" size="md" className="mt-2" onClick={() => disconnect(true)}>Disconnect anyway</Button>}
           </div>
           {msg && <p className="text-sm text-neutral-700 mt-3" role="status">{msg}</p>}
           <p className="text-xs text-neutral-500 mt-3">
-            Your ecash is saved on this device, encrypted with your key. If you lose the phone, your 12 recovery words bring it back (see Recovery phrase). Logging out keeps it here.
+            Your ecash is saved on this device, encrypted with your key. If you lose the phone, your 12 recovery words bring it back (Restore my wallet). Logging out keeps it here.
           </p>
         </>
       )}

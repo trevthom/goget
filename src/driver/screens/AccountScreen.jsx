@@ -2,7 +2,7 @@
 //  ACCOUNT (driver) — Profile, what is needed to drive (vehicle,
 //  Lightning address; the banner names what is still
 //  missing), currency, your rates (frozen while a ride runs), the ecash wallet and the mint you
-//  are paid at, optional gender, driving settings (request radius, alerts), the Lightning wallet,
+//  are paid at, optional gender, driving settings (request radius, alerts),
 //  contact methods, relays, keys, log out. Every setting is a Fold (ui/Fold.jsx): tap its title to open or close it.
 // ════════════════════════════════════════════════════════════
 
@@ -16,12 +16,10 @@ import TypicalFareSection from "../../features/profile/TypicalFareSection.jsx";
 import { driveGaps, gapsText } from "../../lib/profile.js";
 import LightningAddressSection from "../../features/profile/LightningAddressSection.jsx";
 import AppearanceSection from "../../features/profile/AppearanceSection.jsx";
-import WalletSection from "../../features/profile/WalletSection.jsx";
 import VouchesSection from "../../features/profile/VouchesSection.jsx";
 import EcashSection from "../../features/ecash/EcashSection.jsx";
 import ContextSwitch from "../../features/goget/ContextSwitch.jsx";
 import { IS_GOGET } from "../../config/app.js";
-import UnitsSection from "../../features/profile/UnitsSection.jsx";
 import { useUnits, distanceIn, milesFrom } from "../../lib/units.js";
 import CurrencySection from "../../features/profile/CurrencySection.jsx";
 import KeysSection from "../../features/profile/KeysSection.jsx";
@@ -69,7 +67,6 @@ export default function AccountScreen() {
           </Fold>
           <Fold id="appearance" title="Appearance"><AppearanceSection /></Fold>
           <Fold id="currency" title="Currency"><CurrencySection /></Fold>
-          <Fold id="units" title="Units"><UnitsSection /></Fold>
           <Fold id="rates" title="Your rates"><TypicalFareSection rates={user.rates} onSave={(rates) => save({ rates })} locked={onRide} /></Fold>
           <Fold id="ecash" title="Ecash wallet"><EcashSection locked={onRide} /></Fold>
           <RecoveryFold />
@@ -111,7 +108,6 @@ export default function AccountScreen() {
             </div>
           </Fold>
 
-          <Fold id="wallet" title="Lightning wallet"><WalletSection /></Fold>
           <Fold id="contacts" title="Contact methods"><ContactMethods /></Fold>
           <Fold id="vouches" title="Your vouches"><VouchesSection /></Fold>
           <Fold id="blocked" title="Blocked people"><BlockedSection /></Fold>

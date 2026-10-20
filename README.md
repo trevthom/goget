@@ -91,13 +91,10 @@ runs. If the rider misses **two payments**, the driver may finish the ride; the 
 and pay what is missed. Adding a stop keeps the meter running at the driver's rates. All charges are shown in your local currency and paid in sats. A **mint** holds the money behind ecash,
 so use one you trust. Full rules: `docs/index.md`, section *Pay as you ride*.
 
-**Wallets:** *Account → Ecash wallet* holds the ecash you ride with. *Account → Lightning Wallet*: paste a **real**
-Nostr Wallet Connect string (`nostr+walletconnect://...`) from a wallet that supports NWC (Alby Hub, Coinos…) to add funds
-and tip in one tap. The app reads your real balance from that wallet and never shows made-up numbers. Without one you can
-still pay any invoice from another wallet.
+**Wallets:** *Account → Ecash wallet* holds the ecash you ride with. A new phone has **no wallet** yet: tap **Create New Wallet** (the app warns you that the 12 words are the only way to get your money back, then shows them) or **Restore my wallet** (type the 12 words from another phone). Then *Add funds* by Lightning (any wallet pays the invoice). The app shows only what the wallet and the mint confirm, never made-up numbers.
 
 **Lost phone?** Your ecash is saved on the device. *Account → Recovery phrase* shows 12 words to write on paper (and asks you to type
-three back). With them, a new phone finds your ecash again at the mint (*Restore ecash from 12 words*); the money then sits under that phone's own new words, which you write down too. Keep the paper secret: whoever has the words can take the ecash.
+three back). With them, a new phone finds your ecash again at the mint (*Account → Ecash wallet → Restore my wallet*); the money then sits under the same words, so there is nothing new to write down. Keep the paper secret: whoever has the words can take the ecash.
 To take the wallet off a phone you are about to lose or sell, use *Account → Ecash wallet → Disconnect ecash from this device* (the coins are swapped and the wallet and its words are erased there; the money comes back with your 12 words).
 Every part of the Account screen opens and closes when you tap its title. *Account → Appearance → Dark mode* switches to a dark look at once (saved on the device). The password box on the sign-in page has an eye button to show what you typed.
 

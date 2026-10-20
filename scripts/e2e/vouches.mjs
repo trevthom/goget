@@ -58,7 +58,7 @@ try {
 
   await step("Dina and Sam go online", async () => {
     for (const [p, kp] of [[D, dina], [S, sam]]) {
-      await h.login(p, kp, h.driverUrl);
+      await h.login(p, kp, h.driverUrl); // drivers need a wallet to go online
       await p.getByRole("button", { name: "Go online" }).click({ timeout: 40000 });
       await p.getByText("You're online").waitFor({ timeout: 15000 });
     }
@@ -76,7 +76,7 @@ try {
   });
 
   await step("the rider requests a ride", async () => {
-    await h.login(R, h.rider, h.riderUrl);
+    await h.login(R, h.rider, h.riderUrl, { wallet: false });
     await R.getByText(/2 drivers online nearby/).waitFor({ timeout: 60000 });
     await tap(R.getByRole("button", { name: /Where to\?/ }));
     await pinPickup(R);

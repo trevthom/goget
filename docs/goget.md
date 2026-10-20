@@ -47,9 +47,8 @@ Every setting is a section you tap open. The sections are the same in all contex
 | **Switch role** | Change context. |
 | **Appearance** | Dark mode. It saves at once. |
 | **Currency** | Show money in your own currency. Money is always settled in sats. |
-| **Ecash wallet** | Balance, add funds, **Send** (an ecash token or a Lightning payment), the mint you use, paste an ecash token you were sent, back up. Drivers and couriers also get **Cash out** and **Automatically cash out at: $**. |
+| **Ecash wallet** | A new phone has no wallet: **Create New Wallet** (a warning, then the 12 words) or **Restore my wallet** (the 12 words from another phone). Then balance, add funds, **Send** (an ecash token or a Lightning payment), the mint you use, paste an ecash token you were sent, back up. Drivers and couriers also get **Cash out** and **Automatically cash out at: $**. |
 | **Recovery phrase** | The 12 words that restore your ecash on a new phone. |
-| **Lightning wallet** | Connect a wallet (NWC) so *Add funds* is one tap. |
 | **Cash out location** | A Lightning address (`you@wallet.com`). Optional. Used for cash out and tips. |
 | **Contact methods** | How the other person can reach you during a job (Signal, Telegram, phone…). |
 | **Your vouches** | The people you know and trust. See [Vouches](#8-vouches). |

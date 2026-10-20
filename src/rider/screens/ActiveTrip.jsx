@@ -9,6 +9,7 @@
 //  Which one shows is decided from the signed events, not app memory.
 // ════════════════════════════════════════════════════════════
 
+import { WalletPrompt } from "../../features/ecash/WalletStart.jsx";
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "../../state/AppContext.jsx";
 import { useRider } from "../state/RiderContext.jsx";
@@ -255,7 +256,7 @@ function ConfirmDriver({ request, trip, offer, onBack, onDecline }) {
         {!rates || !mint ? (
           <p className="text-amber-700 text-sm mt-3" role="alert">This driver's reply is missing its rates or its ecash mint, so it cannot be used. Choose another driver.</p>
         ) : ecashOff ? (
-          <p className="text-amber-700 text-sm mt-3" role="alert">Your ecash wallet is not connected on this device, so you cannot pay for a ride. Connect it in Account.</p>
+          <WalletPrompt className="mt-3" />
         ) : need == null ? (
           <p className="text-amber-700 text-sm mt-3" role="alert">The bitcoin price for {rates.currency} is not available yet. Try again in a moment.</p>
         ) : null}

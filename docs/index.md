@@ -7,7 +7,7 @@ Last updated with: **a cash out location that is optional, an address search tha
 NostrRide is a decentralized ridesharing system. It is **two web apps** — a rider app and a driver
 app — that find each other through **Nostr relays**. There is no company server and no database.
 The rider pays the driver **while the ride runs**, in small **ecash** payments (Cashu) from the rider's wallet.
-Lightning (through a connected NWC wallet, or any wallet) fills the ecash wallet and pays tips. There are **no cancellations and no cancellation fees**: either person finishes the ride, and the rider pays what the ride earned.
+Lightning (any wallet) fills the ecash wallet, and tips are paid from the ecash. There are **no cancellations and no cancellation fees**: either person finishes the ride, and the rider pays what the ride earned.
 
 > This page is kept up to date with every change. If you change behavior, update the matching
 > section and add a line to the [changelog](#changelog) in the same commit.
@@ -219,7 +219,7 @@ only what the ride has earned so far, and most of it is already paid.
   Set the default with `VITE_DEFAULT_MINT`. The built-in default is the public Minibits mint, `https://mint.minibits.cash/Bitcoin`, a starting point for trying the app (**choose a mint you trust before you launch**). `https://macadamia.cash` is the website of an iOS wallet, not a mint. A mint address is checked before it is saved (*Account → Ecash wallet → Save*): a website that answers with a page is refused with a short reason.
 - The **driver is paid at their mint** (*Account → Ecash wallet*). It is in every offer. The **rider pays at the mint of the driver they choose**. Before the ride
   starts, the rider needs enough ecash there for the base rate, two minutes and a mile.
-- **Add funds:** the mint makes a Lightning invoice. The rider pays it with a connected **NWC wallet** (one tap) or any wallet (QR, text or *Open wallet*). The app collects
+- **Add funds:** the mint makes a Lightning invoice. The rider pays it with any wallet (QR, text or *Open wallet*). The app collects
   the ecash when the invoice is paid. A paid invoice that was not collected is collected the next time the app opens. **Cash out** (driver): the app asks
   the driver's Lightning address for an invoice and the mint pays it from the ecash.
 - **Sending and cashing out ecash.** *Account → Ecash wallet → Send* (both apps; paused while a ride runs) sends money from the balance to another wallet, two ways.
@@ -234,14 +234,14 @@ only what the ride has earned so far, and most of it is already paid.
   redeemed twice. The user can back up the wallet as tokens (*Back up my ecash*). Logging out keeps the ecash on the device; without the nsec it cannot be opened.
 - **The ecash is kept on the device, so the app also gives a way back if the device is lost: see *Recovering the ecash (12 words)* below.**
 - The mint charges a fee for spending proofs (`input_fee_ppk`). The **sender** adds it on top of each tick, so the driver gets the full tick.
-- The Lightning wallet (NWC) is used to **add funds** and for **tips**. Tips are still paid over Lightning to the driver's Lightning address.
+- **Tips** are still paid over Lightning to the driver's Lightning address: from the rider's own ecash (the mint pays the invoice, for a small fee), or with the driver's invoice shown for any other wallet. There is no Lightning-wallet (NWC) connection any more.
 
 ### Recovering the ecash (12 words)
 The proofs live only on the device. A lost phone would mean lost money, so every coin the wallet makes for itself gets its secret from a **recipe**: a 12-word
 **recovery phrase** + the mint's keyset + a counter (Cashu NUT-13). The same 12 words on a new device ask the mint which coins it signed for them and
 still calls unspent (NUT-09), and the money is back. No server, no account, no relay is involved.
 - **The phrase is not the Nostr key.** People paste an nsec into many Nostr apps; if the money came from it, one leak anywhere could drain the wallet. The phrase is a standard
-  BIP39 phrase made on the device from the browser's secure random source, the first time the wallet is opened (before any coin exists, so every coin is under it). Other Cashu wallets
+  BIP39 phrase made on the device from the browser's secure random source, when the person taps **Create New Wallet** (before any coin exists, so every coin is under it). Nothing makes a wallet by itself: a new phone has none until the person creates or restores one. Other Cashu wallets
   that follow NUT-13 can restore from it too.
 - **Where it is kept.** On the device, encrypted (NIP-44) under its own key, made from the user's secret key with its own label (so it is a different key from the one that
   encrypts the proofs). It is never put in an event, never sent to a relay or the mint, and never logged. The app asks for the words only on the Recovery screen.
@@ -251,10 +251,11 @@ still calls unspent (NUT-09), and the money is back. No server, no account, no r
 - **Counters** (one per mint keyset) are saved with the wallet **before** the mint is asked, so a number is never used twice. A coin the mint signed but the wallet never saved
   (a crash, a closed tab) is found again by a restore.
 - **Coins sent to someone else use random secrets.** A restore therefore never brings back a token that was already handed to a driver, and the driver can still redeem it.
-- **Restore** (*Recovery phrase → Restore ecash from 12 words*): the person types the words and names the mints to look in (the ones the app knows are listed already). For each mint the app
-  scans every keyset, keeps the coins the mint calls unspent, and **swaps them all for fresh coins under THIS wallet's own phrase**. The typed phrase is then empty: a leak of it, or a
-  lost phone that still holds it, cannot take the money again, and a copy of the old coins is spent. This device keeps its own 12 words (a new device made them when it first opened the wallet)
-  and the app asks the person to **write them down at once**, because the money now sits under them. Words that find nothing change nothing.
+- **Restore my wallet** (*Account → Ecash wallet*, offered **only while this device has no wallet**): the person types the 12 words and names the mints to look in (the ones the app knows are listed already). The typed words **become this phone's wallet words**:
+  nothing is swept into another phrase and there is nothing new to write down (the person has the words in hand, so they count as written down). For each mint the app scans every keyset, keeps the coins the mint calls unspent, and
+  **swaps them for fresh coins under the same phrase** (a copy of the old coins on a lost phone is spent). **If no mint knows a coin for the words** (a typo that still passes the check, the wrong mint, a mint that did not answer) **everything is undone**
+  and the phone stays without a wallet, so a wrong guess leaves nothing behind. **The last phone to restore holds the money:** another phone that still uses the same words loses its coins (it drops them the next time it asks the mint).
+  A phone that already has a wallet does not offer Restore; to restore other words there, first *Disconnect ecash from this device*.
 - **"I lost a phone: swap my coins"** (shown once the words are written down) does the same swap from the device that still has the wallet.
 - **A device whose coins were moved elsewhere shows the truth.** The wallet asks the mint which of its coins are spent (when it opens and every 5 minutes) and drops them (`syncSpent`), so an old phone stops
   showing money that a restore on another device moved. The mint is asked without holding the money lock, so a slow mint never holds up a payment.
@@ -262,10 +263,10 @@ still calls unspent (NUT-09), and the money is back. No server, no account, no r
   earlier is worth nothing), then **erases the coins, the counters and the recovery phrase from this device** and remembers that the wallet is disconnected. The money stays at the mint and comes back with the 12 words.
   It is **refused** while a payment is being sent, and while there is money and the words are **not written down** (that money would be lost). If a mint cannot be reached for the swap, the person may disconnect
   anyway (a copy taken earlier could still be spent). It is not offered while a ride is running. While disconnected: a **driver cannot go online** and a **rider cannot confirm a driver** (nobody could be paid),
-  and the Ecash wallet part offers **Connect ecash wallet**, which makes a new, empty wallet with new 12 words (then *Restore* can bring older ecash in).
-  If a phone may already have been compromised, restore on a safe device first (the money moves under that device's new words), then disconnect the old one.
+  and the Ecash wallet part offers **Create New Wallet** (new, empty, new 12 words) or **Restore my wallet** (the old 12 words bring the money back; that phone takes over).
+  If a phone may already have been compromised, use *I lost a phone: swap my coins* from a safe device, or restore on a safe device first (the coins on the old phone are then spent), then disconnect the old one.
 - **Two devices with the same phrase** at the same time can pick the same counter. The mint then refuses ("already signed"); the app looks where the mint's records end, moves its counters past them
-  and tries again. It does not take the other device's coins until the person runs Restore.
+  and tries again. It does not take the other device's coins until the person restores there.
 - **Limits.** The mint must support restore (NUT-09) and must still exist. A top-up invoice paid but not yet collected when the phone was lost is not covered. The list of payments is not restored.
   Whoever has the 12 words can take the ecash, so they belong on paper, not in a photo, a note or a cloud.
 - Tests: `test/recovery.test.mjs` (words, the NUT-13 specification vector, the encrypted box), `test/restore.test.mjs` (the real Cashu client against a local mint that remembers what it signed:
@@ -274,7 +275,7 @@ still calls unspent (NUT-09), and the money is back. No server, no account, no r
 
 ### What is built and what is not
 - Built and tested: ticks, the standard fare, missed-payment counting, the final tick, Finish ride with confirmation, the start code, the 150 m arrival rule, the
-  GPS-gap rule, silence and sign-of-life events, extra stops, waivers, currencies, the ecash wallet, funding by invoice and NWC, cash out, rates frozen per ride.
+  GPS-gap rule, silence and sign-of-life events, extra stops, waivers, currencies, the ecash wallet, funding by invoice, cash out, rates frozen per ride.
 - Tested against **a local test mint that does the real blind-signature maths** (`test/helpers/localmint.mjs`) with the real `@cashu/cashu-ts` client, and in a headless
   browser with a rider and a driver. **Not yet run against a public mint or on a phone.**
 - Not built: automatic cash out, mint choice by the rider, multi-mint swaps (a rider with funds at another mint must add funds at the driver's mint), push when the app is
@@ -389,7 +390,7 @@ user action ─▶ signed Nostr event ─▶ relays (and a local cache)
                                        │
 relays ─▶ local cache ─▶ screens read it with relay.query()
 ```
-- `src/state/AppContext.jsx` — shared state (`useApp()`): user, tab, ride requests, `publish`, notices, local currency and BTC prices, the ecash wallet, the NWC wallet.
+- `src/state/AppContext.jsx` — shared state (`useApp()`): user, tab, ride requests, `publish`, notices, local currency and BTC prices, the ecash wallet (none until the person creates or restores one).
 - `src/rider/state/RiderContext.jsx`, `src/driver/state/DriverContext.jsx` — role state.
 - `src/lib/trips.js` — works out the current ride from events (`activeRideFor`, `activeDriveFor`, offers).
 - `src/lib/rides.js` — the **trust rules** (who may finish a ride or mark a stage), and the trip counts.
@@ -446,7 +447,7 @@ Every event carries the app tag `["t","nostrride"]` because kind numbers like 30
 ## Payments
 Payments are **peer to peer, with no escrow and no deposit.** The full rules are in [Pay as you ride](#pay-as-you-ride-ecash-and-finishing-a-ride). In short:
 - **During a ride** the rider pays the driver in **ecash** ticks (base, each mile, each minute, a final part). The driver redeems each one at the mint at once.
-- **Lightning** is used to **fill the ecash wallet** (the mint's invoice, paid by a connected NWC wallet or any wallet), to **cash out** (the driver's wallet takes a Lightning payment
+- **Lightning** is used to **fill the ecash wallet** (the mint's invoice, paid by any wallet), to **cash out** (the driver's wallet takes a Lightning payment
   from the mint), and for **tips**. The app checks that a Lightning invoice is for the exact amount before paying it.
 - **Prices are stated in the person's local currency** and turned into sats at the BTC price when each charge happens. The last prices are kept for 24 hours if the feed is down;
   if a currency has no price, amounts show in sats.
@@ -626,6 +627,7 @@ To switch, copy `env.example` to `.env`, set `VITE_TILE_URL` (and `VITE_PHOTON_U
   and a cancel rate on profiles.
 
 ## Changelog
+- **Create New Wallet / Restore my wallet; no Lightning wallet (NWC); Units under Appearance** — ported from trevthom/nostr-ride (where the rider and driver apps also became one app with a Ride / Drive switch; GoGet keeps its own context switch). (1) **Nothing makes an ecash wallet by itself any more.** A new phone shows, in *Account → Ecash wallet*, **Create New Wallet** (a warning first: the 12 words are the only way to get the money back; then the words are shown at once) and **Restore my wallet** (type the 12 words from another phone). Until there is a wallet a passenger cannot choose a driver, a shipper cannot accept a bid and a driver or courier cannot go online or bid; those screens say so and a button opens the wallet (`WalletPrompt`). A phone that already had a wallet is simply "on". (2) **Restore adopts the typed words, no sweeping:** the words become that phone's words, the unspent coins are found at the mints (NUT-09) and swapped for fresh coins under the same phrase, and nothing new has to be written down. If no mint knows a coin for the words, everything is undone. Restore is offered only while the phone has no wallet. (3) **The Lightning wallet (NWC) is removed** in all four contexts: Add funds shows the mint's invoice for any wallet, and a tip is paid from the rider's ecash or with the driver's invoice shown for another wallet. (4) *Units* moved from its own section into *Appearance*.
 - **Sealed jobs, miles driven, km/miles, backup (branch `GoGet`)** — (1) Every job event (requests, offers, bids, stages, ticks, payments…) is sent only inside NIP-44 gift wraps (kind 1059); relays cannot read kind, tags, places or prices. A request goes to the online drivers/couriers near the pickup (couriers also by CDL); later arrivals get it from the sender's app. (2) *Account → Units*: miles or kilometers (display only). (3) *Account → Backup*: vouches, blocks and settings, encrypted to the user's own key (kind 30111). (4) Total miles driven in the profile (self-reported, kind 0 `stats`).
 - **GoGet (branch `GoGet`)** — a third app, `--mode goget` (port 5175): login → pick a context (Taxi Driver, Courier, Passenger, Shipping) → switch any time in Account. Taxi Driver and Passenger are the driver and rider apps unchanged. New: parcel deliveries (event kinds 30103–30110). A shipper posts a request (type, size, note, places, now or later, CDL need); couriers bid (price, minutes, notes, CDL statement, vehicle, the share paid at pickup); the shipper's Bids tab shows them; accepting one declines the rest; the shipper types the courier's 4-digit code at the handover; the price is paid in two ecash parts. Courier details (CDL box + endorsements) live in Account. Tests: `delivery`; browser: `scripts/e2e/goget.mjs`. See [`goget.md`](goget.md).
 - **Cash out location optional, a calmer address search, send ecash, automatic cash out** — (1) A driver no longer needs a cash out location to go online (the onboarding list and the gate dropped it; the section stays in Account). (2) The address search shows no button and no choice until a box is active; then the map button of that box is first and that box's 3 most recent places are below it (`recentPlaces(field, limit)` reads the rider's own earlier pickups and drop-offs). (3) *Account → Ecash wallet → Send*: an ecash token for another wallet, or a Lightning invoice / address; *Take it back* returns an unclaimed token. (4) *Automatically cash out at* (driver app): a threshold; the app cashes out to the cash out location when the ecash reaches it. Tests: `ecash`, `autocashout`, `negotiation`; browser run: `scripts/e2e/send.mjs`, `nav.mjs`.
@@ -655,7 +657,7 @@ To switch, copy `env.example` to `.env`, set `VITE_TILE_URL` (and `VITE_PHOTON_U
 - **Pickup is never automatic; cancel buttons; stale relay warning fixed; version line** — the pickup is no longer filled in from GPS. The search page asks for an address or a business name, always shows *Set pickup on the map*, and keeps *Your location* as a deliberate tap. *Cancel* (search), *Cancel and go home* (quote), and an X (quote, pin) return to the home screen; the pin page has the X too. The tab bar was checked on every rider screen with real styling. The "No relay accepted your request" warning no longer sticks after a retry succeeds: it shows only while the request still waits in the outbox after 15 s. A relay has 15 s to answer a publish, and the outbox banner needs a 20 s wait. Account shows the app version (build time and commit), so a person can tell which build a phone runs.
 - **Rider navigation, pickup pin, approximate driver location, relay banner, no license photo** — the rider can pin the pickup on the map (drag the map under a fixed pin; the address is looked up). The back arrow on *Plan your ride* goes one screen back (it used to loop between the quote and the search page); an X on the search, pin and quote pages, and the *Ride* tab, cancel the planning and show the home screen. The bottom tab bar is always visible in both apps. A driver can go online and be shown on the map with an approximate location (accurate to 25 km or better); marking *I've arrived* still needs a good fix. The false "can't reach any relay" message is fixed: the relay test no longer uses (and breaks) the app's own connection, the pool waits 15 s for a connection, the banner needs a sustained outage that a separate test confirms, and sockets are renewed after a sleep or a network change. The driver's license photo is gone: no upload, no requirement, no event kind 30092.
 - **Pay as you ride with ecash; Finish ride; start codes; local currency** — the rider pays the driver in ecash ticks while the ride runs (the base rate, each mile, each minute, a final
-  part) from an ecash wallet filled with Lightning (NWC or any wallet); the driver redeems each tick at the mint and can cash out. **No deposit, no escrow, no cancellations and no cancel fees:**
+  part) from an ecash wallet filled with Lightning (any wallet); the driver redeems each tick at the mint and can cash out. **No deposit, no escrow, no cancellations and no cancel fees:**
   either person taps *Finish ride* (confirmed), and the rider pays what the ride earned. After two missed payments the driver may finish; the rider can refill and pay what is missed, also later.
   Standard fare or flat price (a flat price never grows with traffic; an accepted extra stop turns it into the driver's normal fare from the start). The driver's rates and mint are frozen
   for a ride. *I've arrived* works within 50 m only; the ride starts when both people type the other's 2-digit code. Silence rules: a quiet phone is never a finish; "Rider still with me" /

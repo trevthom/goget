@@ -107,7 +107,7 @@ export function ShipperProvider({ children }) {
   // How much ecash I hold at a bid's mint, and what it takes to accept it.
   const fundsFor = useCallback((bid) => ({ have: ecash ? ecash.balance(bid.mint) : 0, need: neededToAccept(bid) }), [ecash]);
   const acceptBid = useCallback(async (request, bid) => {
-    if (ecashOff || !ecash) return { ok: false, message: "Connect your ecash wallet first (Account → Ecash wallet)." };
+    if (ecashOff || !ecash) return { ok: false, message: "Create or restore your ecash wallet first (Account → Ecash wallet)." };
     const { have, need } = fundsFor(bid);
     if (have < need) return { ok: false, short: need - have, message: `You need ${moneyText(need, btcPrice)} in ecash at this courier's mint. You have ${moneyText(have, btcPrice)}.` };
     const exact = exactDelivery(request, user);

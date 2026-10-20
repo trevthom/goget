@@ -9,6 +9,7 @@ import { useState } from "react";
 import { useApp } from "../../state/AppContext.jsx";
 import { useCourier, RADIUS_CHOICES } from "../state/CourierContext.jsx";
 import { Screen } from "../../ui/Layout.jsx";
+import { openFold } from "../../ui/Fold.jsx";
 import Icon from "../../ui/Icon.jsx";
 import Money from "../../ui/Money.jsx";
 import BidForm from "../components/BidForm.jsx";
@@ -27,7 +28,7 @@ export default function JobsScreen() {
     <Screen title="Jobs">
       {!ready && (
         <p className="text-amber-800 bg-amber-50 rounded-xl px-3 py-2 text-sm mb-3" role="status">
-          Your ecash wallet is not connected, so you cannot bid. <button type="button" className="font-semibold underline" onClick={() => setView("account")}>Open Account</button>
+          You have no ecash wallet on this phone, so you cannot bid. <button type="button" className="font-semibold underline" onClick={() => { openFold("ecash"); setView("account"); }}>Set up my wallet</button>
         </p>
       )}
       {!myPosition && <p className="text-sm text-neutral-600 mb-3" role="status">{gpsMessage(gps, myPosition, geoError)} Until your location is known, every open request is shown.</p>}

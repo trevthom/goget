@@ -1,14 +1,15 @@
 // The ecash recovery phrase and the Account folds, in a real browser:
 //   • Account sections are closed until tapped; one that is opened stays open after a reload; a closed section keeps what was typed in it
-//   • a rider adds funds: a warning at the top says the ecash is not protected; "Write down 12 words" shows the words, asks for three of them
+//   • a new device has NO wallet; the rider taps Create New Wallet, is warned, and sees the 12 words at once
+//   • the rider adds funds: a warning at the top says the ecash is not protected; "Write down 12 words" shows the words, asks for three of them
 //     back (a wrong word is refused), and then the warning goes away
 //   • the 12 words never reach a relay (they are not in any event the apps published)
-//   • the phone is "lost": a fresh browser (no saved data) logs in with the same key, the wallet is empty, the 12 words typed into
-//     "Restore ecash" bring the balance back; a wrong phrase is refused with a reason
+//   • the phone is "lost": a fresh browser (no saved data) logs in with the same key and has NO wallet; "Restore my wallet" refuses a wrong phrase
+//     with a reason, keeps nothing for a phrase no mint knows, and the right 12 words bring the balance back under THE SAME words (no sweep,
+//     nothing new to write down)
 //   • the lost phone's own coins were swapped during the restore (the mint calls them spent)
-//   • the restore moves the money under the NEW phone's own new 12 words (shown for writing down), not under the words that were typed
 //   • "Disconnect ecash from this device" on the old phone: its stale coins are dropped, the wallet and its phrase are erased, the phone says
-//     the wallet is not connected; "Connect ecash wallet" makes a new, empty wallet with different words
+//     it has no wallet; "Restore my wallet" there takes the money back (that phone takes over)
 // Takes about a minute. The pages are styled like the real app (Tailwind is built into the app CSS).
 import http from "node:http";
 import { boot, sleep, PICKUP } from "./harness.mjs";
@@ -21,6 +22,7 @@ const step = async (name, fn) => {
   try { await fn(); log("ok  ", name); }
   catch (e) {
     log("FAIL", name, "-", e.message.split("\n").slice(0, 6).join(" | "));
+    for (const [n, p] of [["rider", R], ["rider (new phone)", R2]]) if (p) log(`${n} dialog:`, (await p.getByRole("dialog").first().innerText().catch(() => "(none)")).replace(/\s+/g, " ").slice(0, 500));
     for (const [n, p] of [["rider", R], ["rider (new phone)", R2]]) if (p) log(`${n} page text:`, (await p.locator("body").innerText().catch(() => "")).replace(/\s+/g, " ").slice(0, 700));
     log("errors:", h.errors);
     throw e;
@@ -36,7 +38,7 @@ try {
   R = (await h.newContext("rider", PICKUP)).page;
 
   await step("Account sections are closed at first; a tap opens and closes one; a closed section keeps what was typed", async () => {
-    await h.login(R, h.rider, h.riderUrl);
+    await h.login(R, h.rider, h.riderUrl, { wallet: false });
     await tap(tabs(R).getByText("Account", { exact: true }));
     await header(R, "Ecash wallet").waitFor({ timeout: 40000 });
     for (const t of ["Currency", "Ecash wallet", "Recovery phrase", "Your vouches", "Nostr relays"]) {
@@ -57,7 +59,7 @@ try {
 
   await step("an opened section stays open after a reload; the others stay closed", async () => {
     await R.reload(); // the key lives in memory only, so the person signs in again; what was open is remembered on the device
-    await h.login(R, h.rider, h.riderUrl);
+    await h.login(R, h.rider, h.riderUrl, { wallet: false });
     await tap(tabs(R).getByText("Account", { exact: true }));
     await header(R, "Currency").waitFor({ timeout: 40000 });
     if ((await header(R, "Currency").getAttribute("aria-expanded")) !== "true") throw new Error("Currency should still be open");
@@ -65,8 +67,21 @@ try {
     await tap(header(R, "Currency"));
   });
 
-  await step("the rider adds funds; a warning says the ecash is not protected", async () => {
+  await step("Create New Wallet: a warning first, then the 12 words are shown at once", async () => {
     await openFold(R, "Ecash wallet");
+    await tap(R.getByRole("button", { name: "Create New Wallet", exact: true }));
+    await R.getByText(/12 words are the only way to get your money back/).waitFor({ timeout: 5000 });
+    await tap(R.getByRole("button", { name: "Create wallet", exact: true }));
+    const list = R.getByRole("list", { name: "Your 12 recovery words" });
+    await list.waitFor({ timeout: 20000 });
+    const words = (await list.locator("li span.font-mono").allInnerTexts()).map((w) => w.trim());
+    if (words.length !== 12 || words.some((w) => !/^[a-z]+$/.test(w))) throw new Error("expected 12 words: " + words.join(" "));
+    phrase = words.join(" ");
+    await snap(R, "recovery-created");
+    await tap(R.getByRole("button", { name: "Close", exact: true })); // not written down yet: the next steps show the warning
+  });
+
+  await step("the rider adds funds; a warning says the ecash is not protected", async () => {
     await R.getByRole("button", { name: /Add funds/ }).first().click();
     await R.getByRole("button", { name: "Show invoice" }).click();
     for (let i = 0; i < 40 && ![...h.mint.quotes.values()].some((q) => q.state === "UNPAID"); i++) await sleep(250);
@@ -102,8 +117,7 @@ try {
     const list = R.getByRole("list", { name: "Your 12 recovery words" });
     await list.waitFor({ timeout: 5000 });
     const words = (await list.locator("li span.font-mono").allInnerTexts()).map((w) => w.trim());
-    if (words.length !== 12 || words.some((w) => !/^[a-z]+$/.test(w))) throw new Error("expected 12 words: " + words.join(" "));
-    phrase = words.join(" ");
+    if (words.join(" ") !== phrase) throw new Error("the words differ from the ones shown at creation: " + words.join(" "));
     await snap(R, "recovery-words");
     await tap(R.getByRole("button", { name: "I wrote them down" }));
     const asked = await R.getByLabel(/^Word \d+$/).evaluateAll((els) => els.map((e) => Number(e.getAttribute("aria-label").slice(5))));
@@ -135,42 +149,42 @@ try {
     if (!h.relay.events.length) throw new Error("the relay saw no events at all: the check proves nothing");
   });
 
-  await step("the phone is lost: a fresh browser has an empty wallet; a wrong phrase is refused; the right one brings the money back", async () => {
+  await step("the phone is lost: a fresh browser has NO wallet; a wrong phrase is refused; the right one brings the money back under the same words", async () => {
     R2 = (await h.newContext("rider on a new phone", PICKUP)).page;
-    await h.login(R2, h.rider, h.riderUrl);
+    await h.login(R2, h.rider, h.riderUrl, { wallet: false });
     await tap(tabs(R2).getByText("Account", { exact: true }));
     await openFold(R2, "Ecash wallet");
-    await R2.getByText("Balance").first().waitFor({ timeout: 40000 });
-    if (/5,000 sats/.test(await balanceText(R2))) throw new Error("the new phone should start empty");
-    await openFold(R2, "Recovery phrase");
-    await tap(R2.getByRole("button", { name: "Restore ecash from 12 words" }));
+    await R2.getByRole("button", { name: "Restore my wallet", exact: true }).waitFor({ timeout: 40000 });
+    if (await R2.getByText("Balance").count()) throw new Error("the new phone should have no wallet");
+    await tap(R2.getByRole("button", { name: "Restore my wallet", exact: true }));
     const box = R2.locator('textarea[aria-label="Your 12 recovery words"]');
+    // The sandbox cannot reach the app's public default mint: the person (here, the test) takes it off the list.
+    for (const b of await R2.getByRole("button", { name: /Do not look in (?!127)/ }).all()) await b.click();
     await box.fill("hello world");
     await R2.getByText(/12 words\. You typed 2/).waitFor({ timeout: 5000 });
     if (!(await R2.getByRole("button", { name: "Look for my ecash" }).isDisabled())) throw new Error("a wrong phrase should not be searchable");
     const other = "half depart obvious quality work element tank gorilla view sugar picture humble";
     await box.fill(other);
     await tap(R2.getByRole("button", { name: "Look for my ecash" }));
-    await R2.getByRole("list", { name: "Results" }).getByText(/nothing found/).waitFor({ timeout: 30000 });
-    if (await R2.getByText("You wrote down your 12 words.").count()) throw new Error("a phrase that found nothing must not count as the wallet's phrase");
+    await R2.getByRole("alert").filter({ hasText: /No mint has ecash for these words/ }).waitFor({ timeout: 30000 });
+    await R2.getByRole("list", { name: "Results" }).getByText(/nothing found/).waitFor({ timeout: 5000 });
+    const kept = await R2.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith("nostrride_ecashphrase_") && localStorage.getItem(k) !== "null"));
+    if (kept.length) throw new Error("a phrase that found nothing must not be kept on the phone");
     await box.fill(phrase);
     await R2.getByText("These 12 words look right.").waitFor({ timeout: 5000 });
+    await snap(R2, "recovery-restore-dialog");
     await tap(R2.getByRole("button", { name: "Look for my ecash" }));
-    await R2.getByRole("list", { name: "Results" }).getByText(/found .*moved to your wallet/).waitFor({ timeout: 30000 });
+    await R2.getByText("Balance").first().waitFor({ timeout: 40000 });
     await snap(R2, "recovery-restored");
     if (!/5,000 sats/.test(await balanceText(R2))) throw new Error("expected 5,000 sats back: " + (await balanceText(R2)));
-    if ((await box.inputValue()) !== "") throw new Error("the words should be cleared from the field after the search");
-    // The money is now under THIS phone's own new 12 words. The app asks for them at once: write them down and type three back.
-    const modalList = R2.getByRole("list", { name: "Your 12 recovery words" });
-    await modalList.waitFor({ timeout: 10000 });
-    const newWords = (await modalList.locator("li span.font-mono").allInnerTexts()).map((w) => w.trim());
-    if (newWords.join(" ") === phrase) throw new Error("the new phone took over the old words: it must make its own");
-    await tap(R2.getByRole("button", { name: "I wrote them down" }));
-    const asked = await R2.getByLabel(/^Word \d+$/).evaluateAll((els) => els.map((e) => Number(e.getAttribute("aria-label").slice(5))));
-    for (const n of asked) await R2.getByLabel(`Word ${n}`, { exact: true }).fill(newWords[n - 1]);
-    await tap(R2.getByRole("button", { name: "Check and finish" }));
-    await R2.getByText("You wrote down your 12 words.").waitFor({ timeout: 15000 });
-    phrase2 = newWords.join(" ");
+    if (await R2.getByRole("dialog").count()) throw new Error("the restore dialog should be closed, with no new words to write down");
+    await openFold(R2, "Recovery phrase");
+    await R2.getByText("You wrote down your 12 words.").waitFor({ timeout: 10000 });
+    await tap(R2.getByRole("button", { name: "Show my 12 words" }));
+    const list = R2.getByRole("list", { name: "Your 12 recovery words" });
+    await list.waitFor({ timeout: 5000 });
+    if (((await list.locator("li span.font-mono").allInnerTexts()).map((w) => w.trim()).join(" ")) !== phrase) throw new Error("the restored wallet must keep the typed words");
+    phrase2 = phrase;
   });
 
   await step("the lost phone's coins were swapped during the restore: it can no longer spend them", async () => {
@@ -184,7 +198,7 @@ try {
     await openFold(R, "Ecash wallet");
     await tap(R.getByRole("button", { name: "Disconnect ecash from this device" }));
     await tap(R.getByRole("button", { name: "Swap coins and disconnect" }));
-    await R.getByText(/not connected on this device, so there is no ecash here/).waitFor({ timeout: 30000 });
+    await R.getByText(/You have no ecash wallet on this phone yet/).waitFor({ timeout: 30000 });
     const saved = await R.evaluate(() => {
       const read = (prefix) => Object.keys(localStorage).filter((k) => k.startsWith(prefix)).map((k) => JSON.parse(localStorage.getItem(k)));
       return { proofs: read("nostrride_ecash_"), phrase: read("nostrride_ecashphrase_"), off: read("nostrride_ecashOff_") };
@@ -196,17 +210,15 @@ try {
     await snap(R, "recovery-disconnected");
   });
 
-  await step("Connect ecash wallet makes a new, empty wallet with different words", async () => {
-    await tap(R.getByRole("button", { name: "Connect ecash wallet" }));
-    await R.getByText("Balance").first().waitFor({ timeout: 20000 });
-    if (/5,000 sats/.test(await balanceText(R))) throw new Error("the new wallet should be empty");
-    await openFold(R, "Recovery phrase");
-    await tap(R.getByRole("button", { name: "Write down 12 words" }).first());
-    const list = R.getByRole("list", { name: "Your 12 recovery words" });
-    await list.waitFor({ timeout: 5000 });
-    const words = (await list.locator("li span.font-mono").allInnerTexts()).map((w) => w.trim()).join(" ");
-    if (words === phrase || words === phrase2) throw new Error("the new wallet reuses old words");
-    await tap(R.getByRole("button", { name: "Close", exact: true }));
+  await step("Restore my wallet on the old phone: it takes the money back (the other phone loses its coins)", async () => {
+    await tap(R.getByRole("button", { name: "Restore my wallet", exact: true }));
+    for (const b of await R.getByRole("button", { name: /Do not look in (?!127)/ }).all()) await b.click();
+    await R.locator('textarea[aria-label="Your 12 recovery words"]').fill(phrase);
+    await tap(R.getByRole("button", { name: "Look for my ecash" }));
+    await R.getByText("Balance").first().waitFor({ timeout: 40000 });
+    if (!/5,000 sats/.test(await balanceText(R))) throw new Error("expected 5,000 sats on the old phone: " + (await balanceText(R)));
+    if (await R.getByRole("button", { name: "Restore my wallet", exact: true }).count()) throw new Error("a phone with a wallet must not offer Restore");
+    if (await R.getByRole("button", { name: "Create New Wallet", exact: true }).count()) throw new Error("a phone with a wallet must not offer Create");
   });
 
   for (const [n, p, role] of [["R2", R2, "rider"]]) { const u = await h.missingStyles(p, role); log("class names on screen with no CSS rule (R2):", u.length ? u.join(" ") : "none"); }
