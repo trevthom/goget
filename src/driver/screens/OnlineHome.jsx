@@ -13,17 +13,14 @@
 // ════════════════════════════════════════════════════════════
 
 import { WalletPrompt } from "../../features/ecash/WalletStart.jsx";
-import { formatDistance, ratePerUnit, unitName } from "../../lib/units.js";
+import { formatDistance } from "../../lib/units.js";
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "../../state/AppContext.jsx";
 import { useDriver, fareOf, typicalSatsFor, shownSats } from "../state/DriverContext.jsx";
-import { driveMinutes, pickupEta, roadMiles, ratesOrApp } from "../../lib/fare.js";
-import { formatFiat } from "../../lib/currency.js";
-import { mintLabel } from "../../lib/mints.js";
-import { getMyMint } from "../../features/ecash/myMint.js";
+import { driveMinutes, pickupEta, roadMiles } from "../../lib/fare.js";
 import { haversineDistance } from "../../lib/geo.js";
 import { completedDrives, summarizeEarnings } from "../../lib/earnings.js";
-import { isScheduledLater } from "../../lib/trips.js";
+import { isScheduledLater, isDirected } from "../../lib/trips.js";
 import { OFFER_TTL_SECONDS, REQUEST_CARD_SECONDS } from "../../config/settings.js";
 import MapView from "../../ui/MapView.jsx";
 import Money, { moneyText } from "../../ui/Money.jsx";
@@ -178,7 +175,6 @@ function Incoming({ item, auto, onClose }) {
 
   const typical = typicalSatsFor(request, user.rates, prices); // this driver's own fare for the trip (null while its price is unknown)
   const fare = typical ?? fareOf(request, usdPrice);
-  const rates = ratesOrApp(user.rates);
   const tripMiles = c.distanceMiles ?? roadMiles(haversineDistance(c.pickup.lat, c.pickup.lng, c.dropoff.lat, c.dropoff.lng));
   const tripMin = c.durationMin ?? driveMinutes(tripMiles);
   const awayMin = miles != null ? pickupEta(miles) : null;
@@ -194,6 +190,8 @@ function Incoming({ item, auto, onClose }) {
           <span className="text-sm font-bold tabular-nums bg-neutral-100 rounded-full px-3 py-1" aria-label={`${left} seconds left`}>0:{String(left).padStart(2, "0")}</span>
         )}
       </div>
+
+      {isDirected(request) && <p className="text-sm font-semibold bg-neutral-100 rounded-xl px-3 py-2 mb-3">This rider chose you. Accept, or decline and the rider is told.</p>}
 
       <div className="flex items-end justify-between">
         <div>
@@ -222,12 +220,8 @@ function Incoming({ item, auto, onClose }) {
       <div className="mt-4 pt-3 border-t border-neutral-100"><RiderInfo pubkey={request.pubkey} compact /></div>
       {c.notes && <p className="mt-2 text-sm text-neutral-600 bg-neutral-100 rounded-xl px-3 py-2">“{c.notes}”</p>}
 
-      <p className="text-xs mt-3 text-neutral-500">
-        The rider pays your rates as the ride runs: {formatFiat(rates.base, rates.currency)} base, {formatFiat(ratePerUnit(rates.perMile), rates.currency)}/{unitName()}, {formatFiat(rates.perMinute, rates.currency)}/min.
-      </p>
-
       <p className="text-xs text-neutral-500 mt-3">
-        You are paid in ecash at {mintLabel(getMyMint())} as the ride runs: your base rate at the start, then every mile and every minute. Your rates and mint are frozen once the rider chooses you. You get the exact pickup once {profile?.name || "the rider"} confirms you.
+        Your rates and mint are frozen once the rider chooses you. You get the exact pickup once {profile?.name || "the rider"} confirms you.
       </p>
 
       <StickyActions className="mt-4">

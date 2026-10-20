@@ -92,9 +92,10 @@ try {
   await step("automatic cash out: nothing below the amount; at the amount the app cashes out by itself", async () => {
     const field = D.getByLabel("Automatically cash out at");
     await D.getByText(/Automatically cash out at: \$/).waitFor({ timeout: 5000 });
-    // The driver's address came from the profile and this phone has not confirmed it: nothing is sent there until the driver says it is theirs.
-    if (!(await field.isDisabled())) throw new Error("the box must wait until this phone has confirmed the cash out location");
-    await D.getByRole("button", { name: "Yes, it is mine" }).click();
+    // The driver's address came from the profile and this phone had no pin: it took the address by itself, nobody is asked.
+    for (let i = 0; i < 40 && (await field.isDisabled()); i++) await sleep(250);
+    if (await field.isDisabled()) throw new Error("the box must work once the profile's cash out location has arrived");
+    if (await D.getByText("Yes, it is mine").count()) throw new Error("the person must not be asked to confirm an address");
     for (let i = 0; i < 20 && (await field.isDisabled()); i++) await sleep(250);
     await field.fill("5");
     await field.press("Enter");

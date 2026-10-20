@@ -17,8 +17,9 @@ node scripts/e2e/nav.mjs             # tab bar always visible, back arrow, X to 
 node scripts/e2e/recovery.mjs        # Account sections open and close (and are remembered); write down the 12 recovery words; Create New Wallet warns and shows them; a fresh browser (no wallet) restores the ecash from them under the same words; no phrase on any relay
 node scripts/e2e/disconnect.mjs      # the ecash wallet disconnected from the device: a driver's GO is off and says why; Connect makes a new empty wallet
 node scripts/e2e/goget.mjs         # GoGet: the context picker and slogan; Shipping posts a delivery needing a CDL endorsement; a courier without it does not see it; two bids, the Bids tab number, accepting one declines the other; the 4-digit pickup code; both halves of the ecash payment; a photo of the delivery; switching to Passenger and Taxi Driver
+node scripts/e2e/browse.mjs        # browsing drivers: name · price chips, no estimate, a plain Request ride button, "Female only" / "Male only", the list and "See map", asking one driver (the others get nothing), the driver declines and the rider is told, a driver raises their rates before accepting (popup), "Notify nearest driver immediately"
 node scripts/e2e/send.mjs            # sending ecash (a token, a Lightning invoice or address) and "Automatically cash out at"
-node scripts/e2e/cashout.mjs      # cash out in the Passenger context: the automatic box and a tap; the address is pinned on the device; a profile changed from another phone (a leaked nsec) is not followed and the person is told; an unconfirmed address asks first
+node scripts/e2e/cashout.mjs      # cash out in the Passenger context: the automatic box and a tap; the address is pinned on the device; a profile changed from another phone (a leaked nsec) is not followed and the person is told; a phone with no pin takes the profile address without asking
 node scripts/e2e/appearance.mjs      # dark mode saves the moment it is flipped (both apps) and survives a reload without a white flash; the password eye on Remember me and Unlock
 ```
 

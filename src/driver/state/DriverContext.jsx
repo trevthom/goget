@@ -39,7 +39,7 @@ import { getMyMint } from "../../features/ecash/myMint.js";
 import { isDriveReady } from "../../lib/profile.js";
 import { seal } from "../../lib/privacy.js";
 import { PICKUP_CHANGE_NOTE } from "../../lib/pickup.js";
-import { activeDriveFor, consentedDrive, pendingOfferFor, declinedDrivers } from "../../lib/trips.js";
+import { activeDriveFor, consentedDrive, pendingOfferFor, declinedDrivers, driverDeclines, driverDeclineEvent, isDirected } from "../../lib/trips.js";
 import { hideList, hidesMe } from "../../lib/blocks.js";
 import { isRideExpired, rideEnding, rideKey, rideStatus, rideTimes, rideVersions } from "../../lib/rides.js";
 import { DEFAULT_REQUEST_RADIUS_MILES, LOCATION_PING_MS } from "../../config/settings.js";
@@ -127,7 +127,7 @@ export function DriverProvider({ children }) {
     const beat = () => {
       const p = posRef.current;
       // Never advertise a stale or very vague position (an approximate one is fine: it is rounded to ~100 m).
-      if (p && canBeOnline(gpsRef.current, p)) publishPresence(user, { lat: p.lat, lng: p.lng, vehicle: carLabel(user.vehicle), rates: normalizeRates(user.rates) || undefined, hide: hideList(user.sk, blockedRef.current) });
+      if (p && canBeOnline(gpsRef.current, p)) publishPresence(user, { lat: p.lat, lng: p.lng, vehicle: carLabel(user.vehicle), rates: normalizeRates(user.rates) || undefined, hide: hideList(user.sk, blockedRef.current), gender: user.gender });
     };
     beat();
     const id = setInterval(beat, PRESENCE_EVERY_MS);
@@ -166,7 +166,7 @@ export function DriverProvider({ children }) {
       publishRideLocation(user, riderPubkey, { ...myPosition, ...odo.milesRef.current });
     } else if (visible && canBeOnline(gps, myPosition) && now - lastNativeSend.current.presence > 15000) {
       lastNativeSend.current.presence = now;
-      publishPresence(user, { lat: myPosition.lat, lng: myPosition.lng, vehicle: carLabel(user.vehicle), rates: normalizeRates(user.rates) || undefined, hide: hideList(user.sk, blockedRef.current) });
+      publishPresence(user, { lat: myPosition.lat, lng: myPosition.lng, vehicle: carLabel(user.vehicle), rates: normalizeRates(user.rates) || undefined, hide: hideList(user.sk, blockedRef.current), gender: user.gender });
     }
   }, [myPosition]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -192,7 +192,12 @@ export function DriverProvider({ children }) {
       setSetting("declinedRides", next);
       return next;
     });
-  }, []);
+    // A request the rider sent to me alone: tell the rider, whose app then offers other drivers (lib/trips.js driverDeclineEvent).
+    if (isDirected(request)) {
+      const ev = driverDeclineEvent(request);
+      publish(ev.kind, ev.content, ev.tags, { localOnly: request.tags.some((t) => t[0] === "demo") });
+    }
+  }, [publish]);
   const skip = useCallback((request) => setSkipped((l) => [...l, request.id]), []);
 
   const open = rideRequests
@@ -200,6 +205,7 @@ export function DriverProvider({ children }) {
     .filter((r) => !hidesMe(parse(r)?.hide, r.pubkey, user.sk)) // the rider blocked me: this request never shows up for me
     .filter((r) => !isRideExpired(parse(r), r.created_at))
     .filter((r) => !declinedDrivers(r).has(me)) // the rider turned my offer down: it does not come back
+    .filter((r) => !driverDeclines(r).has(me)) // I said no to it (maybe on another device)
     .filter((r) => !declined.includes(r.id))
     .filter((r) => !pending || r.id !== pending.request.id)
     .map((r) => {

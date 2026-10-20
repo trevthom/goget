@@ -3,7 +3,8 @@
 //   • saving the cash out location on this device pins it: the automatic cash out sends to it, and a tap on Cash out sends to it
 //   • the same nsec on another phone changes the profile's address (what a leaked nsec could do): this phone keeps sending to the pinned
 //     address, says so, pauses the automatic cash out, and no invoice is ever asked from the new address
-//   • "No, put the old one back" restores the profile; a phone that never confirmed the address asks before a tap sends anything
+//   • "No, put the old one back" restores the profile; a phone with no pin takes the profile's address by itself (nobody is asked) and a tap sends at once
+//   • the Cash out button is always there; with no address it says where to set one
 // Takes about two minutes.
 import { boot, sleep, PICKUP } from "./harness.mjs";
 import { tap, makeLog, openFold } from "./flow.mjs";
@@ -60,7 +61,10 @@ try {
     await addFunds(A);
     await A.getByText(/Automatically cash out at: \$/).waitFor({ timeout: 5000 });
     if (!(await A.getByLabel("Automatically cash out at").isDisabled())) throw new Error("the box should wait for a cash out location");
-    if (await A.getByRole("button", { name: "Cash out", exact: true }).count()) throw new Error("Cash out should wait for a cash out location");
+    // The button is always there. With no address it sends nothing and says where to set one.
+    await A.getByRole("button", { name: "Cash out", exact: true }).click();
+    await A.getByText("Set your cash out location (a Lightning address) below, then tap Cash out.").waitFor({ timeout: 5000 });
+    if (h.mint.stats.melted.length) throw new Error("it cashed out with no address");
   });
 
   await step("saving the location pins it; the automatic cash out then sends to it", async () => {
@@ -100,12 +104,12 @@ try {
   const B = ctxB.page;
   await lightningServers(ctxB.ctx);
 
-  await step("another phone with the same key: the address is not confirmed there, so nothing is sent until it is", async () => {
+  await step("another phone with the same key: it takes the profile's address by itself, nobody is asked", async () => {
     await h.login(B, h.rider, h.riderUrl, { wallet: false });
     await wallets(B);
     for (let i = 0; i < 40 && (await location(B).inputValue()) !== GOOD; i++) await sleep(500);
-    await B.getByText("This device has not confirmed it").waitFor({ timeout: 5000 });
-    if (await B.getByText(`Cash outs from this device go to ${GOOD}.`).count()) throw new Error("nothing is pinned on this phone yet");
+    await B.getByText(`Cash outs from this device go to ${GOOD}.`).waitFor({ timeout: 5000 });
+    if (await B.getByText("Yes, it is mine").count()) throw new Error("the person must not be asked to confirm an address");
   });
 
   await step("the other phone changes the address (what a leaked nsec could do)", async () => {
@@ -147,17 +151,15 @@ try {
   const ctxC = await h.newContext("rider-c", PICKUP);
   const C = ctxC.page;
   await lightningServers(ctxC.ctx);
-  await step("a phone that never confirmed the address asks before a tap sends anything", async () => {
+  await step("a phone with no pin takes the profile's address; no question, no button to press", async () => {
     await h.login(C, h.rider, h.riderUrl, { wallet: false });
     await wallets(C);
     for (let i = 0; i < 40 && (await location(C).inputValue()) !== GOOD; i++) await sleep(500);
-    // Phone C has no wallet (the coins live on phone A): what is tested is that the profile's address is not trusted until "Yes, it is mine".
-    await C.getByText("This device has not confirmed it").waitFor({ timeout: 5000 });
-    await C.getByRole("button", { name: "Yes, it is mine" }).click();
     await C.getByText(`Cash outs from this device go to ${GOOD}.`).waitFor({ timeout: 5000 });
+    if (await C.getByText("Yes, it is mine").count()) throw new Error("the person must not be asked to confirm an address");
   });
 
-  await step("a phone that has the wallet but never confirmed the address: a tap asks first; Cancel sends nothing; Yes sends and remembers", async () => {
+  await step("a phone that has the wallet but forgot the pin: a tap sends at once, with no dialog", async () => {
     await addFunds(A);
     const pk16 = await A.evaluate(() => Object.keys(localStorage).find((k) => k.startsWith("nostrride_cashoutTo_")));
     await A.evaluate((k) => localStorage.removeItem(k), pk16); // this phone forgets the address (a new phone would never have had it)
@@ -165,18 +167,11 @@ try {
     await h.login(A, h.rider, h.riderUrl, { wallet: false });
     await wallets(A);
     for (let i = 0; i < 40 && (await location(A).inputValue()) !== GOOD; i++) await sleep(500);
-    await A.getByText("This device has not confirmed it").waitFor({ timeout: 5000 });
-    if (!(await A.getByLabel("Automatically cash out at").isDisabled())) throw new Error("the box must wait for the confirmation");
+    await A.getByText(`Cash outs from this device go to ${GOOD}.`).waitFor({ timeout: 5000 });
     const before = h.mint.stats.melted.length;
     await A.getByRole("button", { name: "Cash out", exact: true }).click();
-    await A.getByText("Cash out to this address?").waitFor({ timeout: 5000 });
-    await A.getByRole("button", { name: "Cancel" }).click();
-    await sleep(1500);
-    if (h.mint.stats.melted.length !== before) throw new Error("Cancel sent money");
-    await A.getByRole("button", { name: "Cash out", exact: true }).click();
-    await A.getByRole("button", { name: "Yes, it is mine" }).last().click();
-    if (!(await waitMelted(before + 1))) throw new Error("Yes did not send");
-    await A.getByText(`Cash outs from this device go to ${GOOD}.`).waitFor({ timeout: 10000 });
+    if (await A.getByText("Cash out to this address?").count()) throw new Error("a tap must not ask to confirm the address");
+    if (!(await waitMelted(before + 1))) throw new Error("the tap did not send");
   });
 
   log("errors:", h.errors.length ? h.errors : "none");

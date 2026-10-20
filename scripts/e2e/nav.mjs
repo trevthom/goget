@@ -29,7 +29,7 @@ const openSearch = async () => { await tap(home(R)); await R.getByText("Plan you
 const toQuote = async () => {
   await R.getByLabel("Where to?").fill("Blue Grass");
   await R.getByRole("button", { name: /Blue Grass Airport/ }).first().click({ timeout: 10000 });
-  await R.getByRole("button", { name: /Request ride · / }).waitFor({ timeout: 15000 });
+  await R.getByRole("button", { name: "Request ride", exact: true }).waitFor({ timeout: 15000 });
 };
 try {
   ({ page: D } = await h.newContext("driver", PICKUP, {}, 3000)); // approximate: accurate to 3 km
@@ -122,7 +122,7 @@ try {
     await R.getByText("Drop-off spot").waitFor({ timeout: 10000 });
     await R.getByText("100 Main St, Lexington").first().waitFor({ timeout: 15000 });
     await tap(R.getByRole("button", { name: "Confirm drop-off" }));
-    await R.getByRole("button", { name: /Request ride · / }).waitFor({ timeout: 15000 });
+    await R.getByRole("button", { name: "Request ride", exact: true }).waitFor({ timeout: 15000 });
     await mustSeeTabs(R, "quote after a pinned drop-off");
     await tap(R.getByRole("button", { name: "Edit" }).first());
     await R.getByText("Plan your ride").waitFor({ timeout: 5000 });
@@ -155,7 +155,7 @@ try {
 
   await step("the tab bar stays visible while a request waits for a driver", async () => {
     await openSearch(); await pinPickup(R); await toQuote();
-    await R.getByRole("button", { name: /Request ride · / }).click({ timeout: 15000 });
+    await R.getByRole("button", { name: "Request ride", exact: true }).click({ timeout: 15000 });
     await R.getByText("Finding your driver").first().waitFor({ timeout: 15000 });
     await mustSeeTabs(R, "finding your driver");
     await R.getByRole("button", { name: "Close request" }).waitFor({ timeout: 3000 });

@@ -3,6 +3,7 @@
 //   D2  alerts on            → BLOCKED by the rider: never sees the request, and the rider never sees D2's car
 //   D3  alerts on            → has BLOCKED the rider: the rider never sees D3's car, D3 never sees the request
 //   D4  alerts on            → normal
+// With two drivers nearby the rider browses them and asks D1 and D4 from the list (the request goes to those two alone).
 // Then: D1 offers, the rider sees "Female driver", says "No thanks", the request stays open, D4 offers and the rider can
 // turn D4 down on the confirm screen too. Last: the rider logs out and the open request closes for the drivers.
 // Takes about two minutes.
@@ -66,10 +67,15 @@ try {
     await pinPickup(R);
     await R.getByLabel("Where to?").fill("Blue Grass");
     await R.getByRole("button", { name: /Blue Grass Airport/ }).first().click({ timeout: 10000 });
-    await R.getByRole("button", { name: /Request ride · / }).waitFor({ timeout: 15000 });
+    await R.getByRole("button", { name: "Request ride", exact: true }).waitFor({ timeout: 15000 });
     await R.getByPlaceholder(/Note for the driver/).fill("Gate B, two bags");
-    await R.getByRole("button", { name: /Request ride · / }).click({ timeout: 15000 });
-    await R.getByText("Finding your driver").first().waitFor({ timeout: 15000 });
+    await R.getByRole("button", { name: "Request ride", exact: true }).click({ timeout: 15000 });
+    // Two drivers are nearby: the rider browses them and asks D1, then D4, from the list.
+    await R.getByRole("heading", { name: "Choose a driver" }).waitFor({ timeout: 15000 });
+    await tap(R.getByRole("button", { name: "Request Fiona Driver" }));
+    await R.getByText(/Waiting for a reply from Fiona Driver/).waitFor({ timeout: 15000 });
+    await tap(R.getByRole("button", { name: "Request Dan Driver" }));
+    await R.getByText(/Waiting for a reply from .*Dan Driver/).waitFor({ timeout: 15000 });
   });
 
   await step("D4 gets the pop-up card; D2 (blocked) and D3 (blocked the rider) see nothing", async () => {
@@ -118,10 +124,11 @@ try {
 
   await step("\"No thanks\": the request stays open and D1 is told", async () => {
     await tap(R.getByRole("button", { name: "Turn down this driver" }));
-    await R.getByText("Finding your driver").first().waitFor({ timeout: 15000 });
+    await R.getByText(/Waiting for a reply from Dan Driver/).waitFor({ timeout: 15000 });
     await P1.getByText(/chose not to ride with you/).first().waitFor({ timeout: 30000 });
     if (await P1.getByRole("button", { name: /See nearby requests/ }).count()) throw new Error("D1 still sees the request after being turned down");
-    if (await R.getByText("Fiona Driver").count()) throw new Error("the declined driver is still on the rider's screen");
+    await R.getByText("You passed").waitFor({ timeout: 5000 });
+    if (await R.getByRole("button", { name: "Request Fiona Driver" }).count()) throw new Error("the turned-down driver can be asked again from the rider's screen");
   });
 
   await step("another driver (D4) can still accept; the rider can turn D4 down on the confirm screen too", async () => {
@@ -133,8 +140,9 @@ try {
     await tabsMust(R);
     await snap(R, "rider-confirm");
     await tap(R.getByRole("button", { name: "Not this driver" }));
-    await R.getByText("Finding your driver").first().waitFor({ timeout: 15000 });
-    if (await R.getByText("Dan Driver").count()) throw new Error("D4 is still on the list after being turned down");
+    await R.getByRole("heading", { name: "Choose a driver" }).waitFor({ timeout: 15000 });
+    if (await R.getByRole("button", { name: "Request Dan Driver" }).count()) throw new Error("D4 can be asked again after being turned down");
+    if ((await R.getByText("You passed").count()) !== 2) throw new Error("both turned-down drivers should read 'You passed'");
   });
 
   await step("logging out closes the request that is still waiting", async () => {
